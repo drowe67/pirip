@@ -1,4 +1,4 @@
-# automate building of rtlsdr lib
+# automate building of rtlsdr library and applications
 sudo apt update
 sudo apt install libusb-1.0-0-dev git cmake
 git clone git://github.com/rtlsdrblog/rtl-sdr-blog.git
