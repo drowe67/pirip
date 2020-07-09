@@ -36,6 +36,7 @@ cmake ../ && make
 ssh into your Pi, then build the RpiTx library and ```fsk_rpitx``` FSK modulator application:
 ```
 $ git clone https://github.com:drowe67/pirip.git
+$ cd pirip
 $ ./build_rpitx.sh
 $ cd tx && make
 ```
@@ -52,15 +53,26 @@ $ ./build_rtlsdr.sh
 
 # Testing
 
-Generate two tone test signal
-Using rtl_sdr | csdr | fsk_demod
-Using new integrated rtl_fsk
-Test frames tx/rx setup
-
+1. Transmit two tone test signal for Pi:
+   ```
+   pi@raspberrypi:~/pirip/tx $ sudo ./fsk_rpitx -t /dev/null
+   ```
+1. Transmit test frames from Pi for 60 seconds:
+   ```
+   pi@raspberrypi:~/pirip/tx $ ~/codec2/build_linux/src/fsk_get_test_bits - 600000 | sudo ./fsk_rpitx -
+   ```
+1. Receive test frames on x86 laptop for 5 seconds:
+   ```
+   ~/pirip$ Fs=240000; tsecs=5; rtl-sdr-blog/build_rtlsdr/src/rtl_sdr -g 1 -s $Fs -f 144500000 - -n $(($Fs*$tsecs)) | ~/codec2/build_linux/src/fsk_demod -d -p 24 2 240000 10000 - - | ~/codec2/build_linux/src/fsk_put_test_bits -
+   ```
+1. Sample received signal and inspect using Octave:
+   ```
+   TODO
+   ```
+   
 # Reading Further
 
 1. [Open IP over VHF/UHF](http://www.rowetel.com/?p=7207) - Blog post introducing this project
 1. [Codec 2 FSK Modem](https://github.com/drowe67/codec2/blob/master/README_fsk.md)
 1. [RpiTx](https://github.com/F5OEO/rpitx) - Radio transmitter software for Raspberry Pis
 1. [rtlsdr driver](https://github.com/rtlsdrblog/rtl-sdr-blog) - Modified Osmocom drivers with enhancements for RTL-SDR Blog V3 units. 
-1. [Open IP over VHF/UHF](http://www.rowetel.com/?p=7207) - Blog post introducing this project
