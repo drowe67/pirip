@@ -71,6 +71,7 @@ $ ./build_rtlsdr.sh
 # Reading Further
 
 1. [Open IP over VHF/UHF](http://www.rowetel.com/?p=7207) - Blog post introducing this project
+1. [Previous Codec 2 PR discussing this project](https://github.com/drowe67/codec2/pull/125)
 1. [Codec 2 FSK Modem](https://github.com/drowe67/codec2/blob/master/README_fsk.md)
 1. [RpiTx](https://github.com/F5OEO/rpitx) - Radio transmitter software for Raspberry Pis
 1. [rtlsdr driver](https://github.com/rtlsdrblog/rtl-sdr-blog) - Modified Osmocom drivers with enhancements for RTL-SDR Blog V3 units. 
