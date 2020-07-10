@@ -54,10 +54,15 @@ $ ./build_rtlsdr.sh
    ```
    pi@raspberrypi:~/pirip/tx $ ../codec2/build_linux/src/fsk_get_test_bits - 600000 | sudo ./fsk_rpitx -
    ```
-1. Receive test frames on x86 laptop for 5 seconds:
+1. Receive test frames on x86 laptop for 5 seconds (vanilla rtl_sdr):
    ```
    ~/pirip$ Fs=240000; tsecs=5; rtl-sdr-blog/build_rtlsdr/src/rtl_sdr -g 1 -s $Fs -f 144500000 - -n $(($Fs*$tsecs)) | codec2/build_linux/src/fsk_demod -d -p 24 2 240000 10000 - - | codec2/build_linux/src/fsk_put_test_bits -
    ```
+1. Receive test frames on x86 laptop for 5 seconds (integrated rtl_fsk):
+   ```
+   Fs=240000; tsecs=5; ./rtl-sdr-blog/build_rtlsdr/src/rtl_fsk -g 1 -f 144490000 - -n $(($Fs*$tsecs)) | codec2/build_linux/src/fsk_put_test_bits -
+   ```
+   Note this is tuned about 10kHz low, to put the two tones above the rtl_sdr DC line.  
 1. Sample received signal and inspect using Octave:
    ```
    TODO
