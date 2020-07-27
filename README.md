@@ -60,12 +60,16 @@ $ ./build_rtlsdr.sh
    ```
 1. Receive test frames on x86 laptop for 5 seconds (integrated rtl_fsk):
    ```
-   Fs=240000; tsecs=5; ./rtl-sdr-blog/build_rtlsdr/src/rtl_fsk -g 1 -f 144490000 - -n $(($Fs*$tsecs)) | codec2/build_linux/src/fsk_put_test_bits -
+   ~/pirip$  Fs=240000; tsecs=5; ./rtl-sdr-blog/build_rtlsdr/src/rtl_fsk -g 1 -f 144490000 - -n $(($Fs*$tsecs)) | codec2/build_linux/src/fsk_put_test_bits -
    ```
    Note this is tuned about 10kHz low, to put the two tones above the rtl_sdr DC line.  
-1. Sample received signal and inspect using Octave:
+1. Demod GUI. Open a new console and start `demod_gui.py`:
    ```
-   TODO
+   ~/pirip$ netcat -luk 8001 | python demod_gui.py
+   ```
+   In another console start the FSK demod:
+   ```
+   ~/pirip$ Fs=240000; tsecs=20; ./rtl-sdr-blog/build_rtlsdr/src/rtl_fsk -g 1 -f 144490000 - -n $(($Fs*$tsecs)) -u localhost | codec2/build_linux/src/fsk_put_test_bits -
    ```
    
 # Reading Further
