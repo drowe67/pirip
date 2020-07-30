@@ -15,7 +15,7 @@ results=mktemp
 
 tsecs=5; rtl-sdr-blog/build_rtlsdr/src/rtl_sdr -g 1 -s $Fs -f 144500000 - -n $(($Fs*$tsecs)) | codec2/build_linux/src/fsk_demod -d -p 24 2 $Fs $Rb - - | codec2/build_linux/src/fsk_put_test_bits -q -p $passRxPackets - 2>&1 | tee ${RESULTS} &
 rx_pid=$!
-sleep 1
+sleep 2
 
 # send packets on Pi
 
