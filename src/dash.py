@@ -44,6 +44,7 @@ for line in sys.stdin:
     f_axis_kHz = -Fs_kHz/2 + np.arange(len(Sf))*Fs_kHz/len(Sf)
     plt.plot(f_axis_kHz, Sf)
     for f in f_est_kHz:
+        print(f)
         plt.plot([f, f], [0, 1],"r")
     
     plt.subplot(312)

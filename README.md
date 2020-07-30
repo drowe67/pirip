@@ -27,7 +27,7 @@ This procedure builds everything locally, so won't interfere with any installed 
 
 ssh into your Pi, then:
 ```
-$ git clone https://github.com:drowe67/pirip.git
+$ git clone https://github.com/drowe67/pirip.git
 $ cd pirip
 $ ./build_codec2.sh
 $ ./build_rpitx.sh
@@ -65,7 +65,7 @@ $ ./build_rtlsdr.sh
    Note this is tuned about 10kHz low, to put the two tones above the rtl_sdr DC line.  
 1. Demod GUI. Open a new console and start `demod_gui.py`:
    ```
-   ~/pirip$ netcat -luk 8001 | python demod_gui.py
+   ~/pirip$ netcat -luk 8001 | ./dash.py
    ```
    In another console start the FSK demod:
    ```
