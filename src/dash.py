@@ -34,7 +34,7 @@ for line in sys.stdin:
     norm_timing.extend(latest_norm_timing)
     one_sec = len(latest_norm_timing)
     if len(norm_timing) > roll_s*one_sec:
-        norm_timing = norm_timing[one_sec:-one_sec]
+        norm_timing = norm_timing[one_sec:]
     
     plt.clf()
     plt.subplot(311)
@@ -44,13 +44,17 @@ for line in sys.stdin:
     f_axis_kHz = -Fs_kHz/2 + np.arange(len(Sf))*Fs_kHz/len(Sf)
     plt.plot(f_axis_kHz, Sf)
     for f in f_est_kHz:
-        print(f)
         plt.plot([f, f], [0, 1],"r")
+    plt.ylabel('Freq')
     
     plt.subplot(312)
     plt.plot(SNRestdB)
+    plt.ylabel('SNR')
+    plt.ylim([0, 40])
     plt.subplot(313)
     plt.plot(norm_timing)
+    plt.ylabel('Timing')
+    plt.ylim([-0.5, 0.5])
     
     plt.draw()
     plt.pause(0.01) # renders plot
