@@ -1,0 +1,10 @@
+dash_host=penetrator
+freq=144500000
+Fs=240000
+Rb=10000
+rx_freq=$(($freq-2*$Rb))
+numTxPackets=1000
+bitsPerPacket=100
+numTxBits=$(( ${numTxPackets}*${Rb}/${bitsPerPacket} ))
+passRxPackets=$(( $numTxPackets-10 ))
+rx_secs=15
