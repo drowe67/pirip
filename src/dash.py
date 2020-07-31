@@ -45,12 +45,15 @@ for line in sys.stdin:
     plt.plot(f_axis_kHz, Sf)
     for f in f_est_kHz:
         plt.plot([f, f], [0, 1],"r")
+    plt.ylabel('Freq')
     
     plt.subplot(312)
     plt.plot(SNRestdB)
+    plt.ylabel('SNR')
     plt.ylim([0, 40])
     plt.subplot(313)
     plt.plot(norm_timing)
+    plt.ylabel('Timing')
     plt.ylim([-0.5, 0.5])
     
     plt.draw()

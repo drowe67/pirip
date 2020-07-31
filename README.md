@@ -10,14 +10,15 @@ The software currently sends test frames from a Pi to a x86 laptop with a RTLSDR
 
 | Milestone | Description |
 | --- | --- |
-| M1 | Proof of Concept Physical Layer |
-| M2 | Git repo for project, integrated tx and rx applications, first OTA tests |
-| M3 | Pi running Tx and Rx |
-| M4 | Add LDPC FEC to waveform |
-| M5 | Bidirectional half duplex Tx/Rx on single Pi |
-| M6 | TAP/TUN integration and demo IP link |
-| M7 | Diagostics that can be used to tune and debug link (e.g. simple GUI/ASCII) |
-| M8 | Document how to build simple wire antennas |
+| M1 | ~~Proof of Concept Physical Layer~~ |
+| M2 | ~~Git repo for project, integrated tx and rx applications~~ |
+| M3 | ~~Simple GUI Dashboard that can be used to tune and debug link~~ |
+| M4 | first OTA tests |
+| M5 | Pi running Tx and Rx |
+| M6 | Add LDPC FEC to waveform |
+| M7 | Bidirectional half duplex Tx/Rx on single Pi |
+| M8 | TAP/TUN integration and demo IP link |
+| M9 | Document how to build simple wire antennas |
 
 # Building
 
@@ -63,14 +64,26 @@ $ ./build_rtlsdr.sh
    ~/pirip$  Fs=240000; tsecs=5; ./rtl-sdr-blog/build_rtlsdr/src/rtl_fsk -g 1 -f 144490000 - -n $(($Fs*$tsecs)) | codec2/build_linux/src/fsk_put_test_bits -
    ```
    Note this is tuned about 10kHz low, to put the two tones above the rtl_sdr DC line.  
-1. Demod GUI. Open a new console and start `demod_gui.py`:
+1. Demod GUI Dashboard. Open a new console and start `demod_gui.py`:
    ```
-   ~/pirip$ netcat -luk 8001 | ./dash.py
+   ~/pirip$ netcat -luk 8001 | ./src/dash.py
    ```
    In another console start the FSK demod:
    ```
    ~/pirip$ Fs=240000; tsecs=20; ./rtl-sdr-blog/build_rtlsdr/src/rtl_fsk -g 1 -f 144490000 - -n $(($Fs*$tsecs)) -u localhost | codec2/build_linux/src/fsk_put_test_bits -
    ```
+   ![](doc/dash.png)
+1. Automated loopback tests.  Connect your Pi to your RTLSDR via a 60dB attenuator
+
+   Using vanilla `rtl_sdr`:
+   ```
+   ./test/loopback_rtl_sdr.sh
+   ```
+   Using integrated `rtl_fsk`:
+   ```
+   ./test/loopback_rtl_fsk.sh
+   ```
+   You can monitor `loopback_rtl_fsk.sh` using `dash.py` as above.
    
 # Reading Further
 
