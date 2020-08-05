@@ -13,7 +13,7 @@ The software currently sends test frames from a Pi to a x86 laptop with a RTLSDR
 | M1 | ~~Proof of Concept Physical Layer~~ |
 | M2 | ~~Git repo for project, integrated tx and rx applications~~ |
 | M3 | ~~Simple GUI Dashboard that can be used to tune and debug link~~ |
-| M4 | first OTA tests |
+| M4 | first OTA tests using uncoded modem |
 | M5 | Pi running Tx and Rx |
 | M6 | Add LDPC FEC to waveform |
 | M7 | Bidirectional half duplex Tx/Rx on single Pi |
