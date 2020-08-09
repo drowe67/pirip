@@ -38,11 +38,11 @@ for line in sys.stdin:
     
     plt.clf()
     plt.subplot(311)
-    Sf = data['Sf']
+    SfdB = data['SfdB']
     f_est_kHz = np.array(data['f_est_Hz'])/1000
     Fs_kHz = data['Fs_Hz']/1000
-    f_axis_kHz = -Fs_kHz/2 + np.arange(len(Sf))*Fs_kHz/len(Sf)
-    plt.plot(f_axis_kHz, Sf)
+    f_axis_kHz = -Fs_kHz/2 + np.arange(len(SfdB))*Fs_kHz/len(SfdB)
+    plt.plot(f_axis_kHz, SfdB)
     for f in f_est_kHz:
         plt.plot([f, f], [0, 1],"r")
     plt.ylabel('Freq')
