@@ -5,9 +5,7 @@
   FSK modulates a one bit per char input bit stream using rpitx.
 
   TODO:
-  [X] works with previous tx-rx test
-  [ ] no input file needed for test mode
-  [ ] create our own repo/clones librpitx/cmake/README.md
+  [ ] -t -c run without an argument
 */
 
 #include <stdio.h>
@@ -39,6 +37,7 @@ int main(int argc, char **argv)
     }
 
     FILE *fin;
+    int   carrier_test = 0;
     int   one_zero_test = 0;
     float frequency = 144.5e6;
     int   SymbolRate = 10000;
@@ -47,11 +46,14 @@ int main(int argc, char **argv)
     float shiftHz = -1;
     ngfmdmasync *fmmod;
     
-    char usage[] = "usage: %s [-m fskM 2|4] [-f carrierFreqHz] [-r symbRateHz] [-s shiftHz] [-t] InputOneBitPerCharFile\n";
+    char usage[] = "usage: %s [-m fskM 2|4] [-f carrierFreqHz] [-r symbRateHz] [-s shiftHz] [-t] [-c] InputOneBitPerCharFile\n";
 
     int opt;
-    while ((opt = getopt(argc, argv, "m:f:r:t")) != -1) {
+    while ((opt = getopt(argc, argv, "m:f:r:tc")) != -1) {
         switch (opt) {
+        case 'c':
+            carrier_test = 1;
+            break;
         case 'm':
             m = atoi(optarg);
             break;
@@ -97,8 +99,8 @@ int main(int argc, char **argv)
 
     fprintf(stderr, "Frequency: %4.1f MHz Rs: %4.1f kHz Shift: %4.1f kHz M: %d \n", frequency/1E6, SymbolRate/1E3, shiftHz/1E3, m);
     
-    if (one_zero_test == 0) { 
- 
+    if ((carrier_test == 0) && (one_zero_test == 0)) { 
+        /* regular FSK modulator operation */     
         while(running) {
             uint8_t tx_bits[log2m];
             int BytesRead = fread(tx_bits, sizeof(uint8_t), log2m, fin);
@@ -119,8 +121,17 @@ int main(int argc, char **argv)
                 running=false;
         }
         
-    } else {
+    }
 
+    if (carrier_test) {
+        fprintf(stderr, "Carrier test mode, Ctrl-C to exit\n");
+        float VCOfreqHz = 0;
+        while(running) {
+            fmmod->SetFrequencySamples(&VCOfreqHz,1);
+        }
+    }
+
+    if (one_zero_test) {
         fprintf(stderr, "...010101... test mode, Ctrl-C to exit\n");
         float VCOfreqHz = 0;
         while(running) {
