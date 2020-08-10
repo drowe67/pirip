@@ -45,9 +45,9 @@ for line in sys.stdin:
     Fs_kHz = data['Fs_Hz']/1000
     f_axis_kHz = -Fs_kHz/2 + np.arange(len(SfdB))*Fs_kHz/len(SfdB)
     plt.plot(f_axis_kHz, SfdB)
-    height = 0.2*max(SfdB)
+    height = 10;
     for f in f_est_kHz:
-        plt.plot([f, f], [0, height],"r")
+        plt.plot([f, f], [0, 0],"r+")
     plt.plot([fsk_lower_kHz, fsk_lower_kHz], [0, height],"g")
     plt.plot([fsk_upper_kHz, fsk_upper_kHz], [0, height],"g")
     plt.ylabel('Freq')
