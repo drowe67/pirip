@@ -53,9 +53,10 @@ for line in sys.stdin:
     plt.ylabel('Freq')
     
     plt.subplot(312)
-    mx = 10*int(np.max(SNRestdB)/10)
+    
     plt.plot(SNRestdB)
     plt.ylabel('SNR')
+    mx = 10*np.ceil(np.max(SNRestdB)/10);
     plt.ylim([0, mx])
     plt.grid()
     plt.subplot(313)
