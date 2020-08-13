@@ -48,9 +48,11 @@ for line in sys.stdin:
     plt.ylabel('Freq')
     
     plt.subplot(312)
+    mx = 10*int(np.max(SNRestdB)/10)
     plt.plot(SNRestdB)
     plt.ylabel('SNR')
-    plt.ylim([0, 40])
+    plt.ylim([0, mx])
+    plt.grid()
     plt.subplot(313)
     plt.plot(norm_timing)
     plt.ylabel('Timing')

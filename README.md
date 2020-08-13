@@ -84,6 +84,17 @@ $ ./build_rtlsdr.sh
    ./test/loopback_rtl_fsk.sh
    ```
    You can monitor `loopback_rtl_fsk.sh` using `dash.py` as above.
+
+1. Using a HackRF as a transmitter, useful for bench testing the link.  The relatively low levels out of the HackRF make MDS testing easier compared to attenuating the somewhat stronger signal from the RPi.
+   This example generates 200 bit/s FSK with a 400Hz shift:
+   ```
+   ./fsk_get_test_bits - 10000 | ./fsk_mod -c 2 40000 200 1000 1400 - - | csdr convert_s16_f | csdr gain_ff 16 | csdr convert_f_s16 | ../misc/tlininterp - t.iq8 100 -d -f
+   ```
+   The output samples are at a sample rate of 4MHz, and a frequency offset of +1 MHz.  The `csdr` utilities are used to boost the signal to use the full 8-bit range of the HackRF. They can be played out of the HackRF with:
+   ```
+   hackrf_transfer -t t.iq8 -s 4E6 -f 143.5E6
+   ```
+   The signal will be centred on 144.5 MHz (143.5 + 1 MHz offset).
    
 # Reading Further
 
