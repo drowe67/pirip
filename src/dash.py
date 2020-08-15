@@ -46,11 +46,13 @@ for line in sys.stdin:
     f_axis_kHz = -Fs_kHz/2 + np.arange(len(SfdB))*Fs_kHz/len(SfdB)
     plt.plot(f_axis_kHz, SfdB)
     height = 10;
+    mn = np.min(SfdB);
     for f in f_est_kHz:
-        plt.plot([f, f], [0, 0],"r+")
-    plt.plot([fsk_lower_kHz, fsk_lower_kHz], [0, height],"g")
-    plt.plot([fsk_upper_kHz, fsk_upper_kHz], [0, height],"g")
-    plt.ylabel('Freq')
+        plt.plot(f, mn,"r+")
+    plt.plot([fsk_lower_kHz, fsk_lower_kHz], [mn, mn+height],"g")
+    plt.plot([fsk_upper_kHz, fsk_upper_kHz], [mn, mn+height],"g")
+    plt.grid()
+    plt.ylabel('Spectrum')
     
     plt.subplot(312)
     

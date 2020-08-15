@@ -57,11 +57,12 @@ $ ./build_rtlsdr.sh
    ```
 1. Receive test frames on x86 laptop for 5 seconds (vanilla rtl_sdr):
    ```
-   ~/pirip$ Fs=240000; tsecs=5; rtl-sdr-blog/build_rtlsdr/src/rtl_sdr -g 1 -s $Fs -f 144500000 - -n $(($Fs*$tsecs)) | codec2/build_linux/src/fsk_demod -d -p 24 2 240000 10000 - - | codec2/build_linux/src/fsk_put_test_bits -
+   ~/pirip$ Fs=240000; rtl-sdr-blog/build_rtlsdr/src/rtl_sdr -g 49 -s $Fs -f 144490000 - | codec2/build_linux/src/fsk_demod --fsk_lower 500 --fsk_upper 25000 -d -p 24 2 240000 10000 - - | codec2/build_linux/src/fsk_put_test_bits -
+
    ```
 1. Receive test frames on x86 laptop for 5 seconds (integrated rtl_fsk):
    ```
-   ~/pirip$  Fs=240000; tsecs=5; ./rtl-sdr-blog/build_rtlsdr/src/rtl_fsk -g 1 -f 144490000 - -n $(($Fs*$tsecs)) | codec2/build_linux/src/fsk_put_test_bits -
+   ~/pirip$  Fs=240000; tsecs=5; ./rtl-sdr-blog/build_rtlsdr/src/rtl_fsk -g 49 -f 144490000 - -n $(($Fs*$tsecs)) | codec2/build_linux/src/fsk_put_test_bits -
    ```
    Note this is tuned about 10kHz low, to put the two tones above the rtl_sdr DC line.  
 1. Demod GUI Dashboard. Open a new console and start `demod_gui.py`:
@@ -85,12 +86,12 @@ $ ./build_rtlsdr.sh
    ```
    You can monitor `loopback_rtl_fsk.sh` using `dash.py` as above.
 
-1. Using a HackRF as a transmitter, useful for bench testing the link.  The relatively low levels out of the HackRF make MDS testing easier compared to attenuating the somewhat stronger signal from the RPi.
-   This example generates 200 bit/s FSK with a 400Hz shift:
+1. Using a HackRF as a transmitter, useful for bench testing the link.  The relatively low levels out of the HackRF make MDS testing easier compared to attenuating the somewhat stronger signal from the Pi.
+   This example generates 1000 bit/s FSK with a 2000Hz shift:
    ```
-   ./fsk_get_test_bits - 10000 | ./fsk_mod -c 2 40000 200 1000 1400 - - | csdr convert_s16_f | csdr gain_ff 16 | csdr convert_f_s16 | ../misc/tlininterp - t.iq8 100 -d -f
+   ./fsk_get_test_bits - 60000 | ./fsk_mod -c -a 32767 2 40000 1000 1000 2000 - - | ../misc/tlininterp - t.iq8 100 -d -f
    ```
-   The output samples are at a sample rate of 4MHz, and a frequency offset of +1 MHz.  The `csdr` utilities are used to boost the signal to use the full 8-bit range of the HackRF. They can be played out of the HackRF with:
+   The output samples are at a sample rate of 4MHz, and a frequency offset of +1 MHz.  They can be played out of the HackRF with:
    ```
    hackrf_transfer -t t.iq8 -s 4E6 -f 143.5E6
    ```
