@@ -59,6 +59,10 @@ $ ./build_rtlsdr.sh
    ```
    ~/pirip$ Fs=240000; rtl-sdr-blog/build_rtlsdr/src/rtl_sdr -g 49 -s $Fs -f 144490000 - | codec2/build_linux/src/fsk_demod --fsk_lower 500 --fsk_upper 25000 -d -p 24 2 240000 10000 - - | codec2/build_linux/src/fsk_put_test_bits -
 
+1.  Receive test frames on x86 laptop for 5 seconds (vanilla rtl_sdr at Fs=1.8MHz):
+   ```
+   Fs=1800000; ./src/rtl_sdr -g 49 -s $Fs -f 144500000 - | csdr convert_u8_f | csdr fir_decimate_cc 45 | csdr convert_f_s16 | ../../codec2/build_linux/src/fsk_demod --fsk_lower 500 -c 2 40000 1000 - - | ../../codec2/build_linux/src/fsk_put_test_bits -
+
    ```
 1. Receive test frames on x86 laptop for 5 seconds (integrated rtl_fsk):
    ```
@@ -89,6 +93,7 @@ $ ./build_rtlsdr.sh
 1. Using a HackRF as a transmitter, useful for bench testing the link.  The relatively low levels out of the HackRF make MDS testing easier compared to attenuating the somewhat stronger signal from the Pi.
    This example generates 1000 bit/s FSK with a 2000Hz shift:
    ```
+   cd codec2/build_linux/src
    ./fsk_get_test_bits - 60000 | ./fsk_mod -c -a 32767 2 40000 1000 1000 2000 - - | ../misc/tlininterp - t.iq8 100 -d -f
    ```
    The output samples are at a sample rate of 4MHz, and a frequency offset of +1 MHz.  They can be played out of the HackRF with:
