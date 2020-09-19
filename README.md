@@ -6,7 +6,7 @@ Minimal hardware IP over VHF/UHF Radio using RpiTx and RTLSDRs [1].
 
 # Project Plan and Status
 
-Next step is to try some Over The Air (OTA) tests.
+Currently working on M4 -Over The Air (OTA) tests.
 
 | Milestone | Description |
 | --- | --- |
@@ -35,13 +35,14 @@ $ ./build_rpitx.sh
 $ cd tx && make
 ```
 
-## RTLSDR Receiver
+## RTLSDR FSK Receiver
 
 On your laptop/PC:
 ```
 $ sudo apt update
 $ sudo apt install libusb-1.0-0-dev git cmake
 $ ./build_codec2.sh
+$ ./build_csdr.sh
 $ ./build_rtlsdr.sh
 ```
 
@@ -96,11 +97,28 @@ $ ./build_rtlsdr.sh
    hackrf_transfer -t t.iq8 -s 4E6 -f 143.5E6
    ```
    The signal will be centred on 144.5 MHz (143.5 + 1 MHz offset).
+
+1. Noise Figure Testing
+
+   Connect a signal generator to the input of the RTLSDR.  Set the frequency to 144.5MHz, and amplitude to -100dBm.
+
+   The following command pipes the RTL output to an Octave script to measure noise figure.  You need the CSDR tools and Octave installed:
+   ```
+   $ cd ~/pirip/rtl-sdr-blog/build_rtlsdr/src
+   $ ./rtl_sdr -g 50 -s 2400000 -f 144.498E6 - | csdr convert_u8_f | csdr fir_decimate_cc 50 | csdr convert_f_s16 | octave --no-gui -qf ~/pirip/codec2/octave/nf_from_stdio.m 48000 complex
+
+   ```
+   A few Octave plot windows will pop up.  Adjust your signal generator frequency so the sine wave is between 2000 and 4000, the
+   script will print the Noise Figure (NF).  Around 6-6.2 dB was obtained using RTL-SDR.COM V3s using"-g 50"
+   
+   See also codec2/octave/nf_from_stdio.m and [Measuring SDR Noise Figure in Real Time](http://www.rowetel.com/?page_id=6172).
    
 # Reading Further
 
 1. [Open IP over VHF/UHF](http://www.rowetel.com/?p=7207) - Blog post introducing this project
+1. [Open IP over VHF/UHF 2](http://www.rowetel.com/?p=7334) - Second blog post on uncoded OTA tests
 1. [Previous Codec 2 PR discussing this project](https://github.com/drowe67/codec2/pull/125)
 1. [Codec 2 FSK Modem](https://github.com/drowe67/codec2/blob/master/README_fsk.md)
 1. [RpiTx](https://github.com/F5OEO/rpitx) - Radio transmitter software for Raspberry Pis
-1. [rtlsdr driver](https://github.com/rtlsdrblog/rtl-sdr-blog) - Modified Osmocom drivers with enhancements for RTL-SDR Blog V3 units. 
+1. [rtlsdr driver](https://github.com/librtlsdr/librtlsdr) - Our rtlsdr driver is forked from this fine repo. 
+1. [Measuring SDR Noise Figure in Real Time](http://www.rowetel.com/?page_id=6172)
