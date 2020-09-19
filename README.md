@@ -103,6 +103,11 @@ $ ./build_rtlsdr.sh
    ```
    The signal will be centred on 144.5 MHz (143.5 + 1 MHz offset).
 
+   You can receive it with:
+   ```
+   ./rtl_fsk -w 500E3 -e ff8 -r 1000 -f 144490000 - -u localhost | ~/pirip/codec2/build_linux/src/fsk_put_test_bits -
+   ```
+
 1. Noise Figure Testing
 
    Connect a signal generator to the input of the RTLSDR.  Set the frequency to 144.5MHz, and amplitude to -100dBm.
@@ -117,10 +122,16 @@ $ ./build_rtlsdr.sh
    script will print the Noise Figure (NF).  Around 6.5 dB was obtained using RTL-SDR.COM V3s using"-g 50"
    
    See also codec2/octave/nf_from_stdio.m and [Measuring SDR Noise Figure in Real Time](http://www.rowetel.com/?page_id=6172).
+
+1. Running Rx on Pi:  This example 10 kbit/s, dashboard running on laptop 192.168.1.100
+   ```
+   ./rtl_fsk -s 2400000 -a 80000 -w 500E3 -e ff8 -r 10000 -f 144490000 - -u 192.168.1.100 | ~/pirip/codec2/build_linux/src/fsk_put_test_bits -
+
+   ```
    
 # Reading Further
 
-1. [Open IP over VHF/UHF](http://www.rowetel.com/?p=7207) - Blog post introducing this project
+1. [Open IP over VHF/UHF 1](http://www.rowetel.com/?p=7207) - Blog post introducing this project
 1. [Open IP over VHF/UHF 2](http://www.rowetel.com/?p=7334) - Second blog post on uncoded OTA tests
 1. [Previous Codec 2 PR discussing this project](https://github.com/drowe67/codec2/pull/125)
 1. [Codec 2 FSK Modem](https://github.com/drowe67/codec2/blob/master/README_fsk.md)
