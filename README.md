@@ -58,7 +58,7 @@ $ ./build_rtlsdr.sh
    ```
 1. Receive test frames on x86 laptop for 5 seconds (vanilla rtl_sdr):
    ```
-   ~/pirip$ Fs=240000; rtl-sdr-blog/build_rtlsdr/src/rtl_sdr -g 49 -s $Fs -f 144490000 - | codec2/build_linux/src/fsk_demod --fsk_lower 500 --fsk_upper 25000 -d -p 24 2 240000 10000 - - | codec2/build_linux/src/fsk_put_test_bits -
+   ~/pirip$ Fs=240000; librtlsdr/build_rtlsdr/src/rtl_sdr -g 49 -s $Fs -f 144490000 - | codec2/build_linux/src/fsk_demod --fsk_lower 500 --fsk_upper 25000 -d -p 24 2 240000 10000 - - | codec2/build_linux/src/fsk_put_test_bits -
 
 1.  Receive test frames on x86 laptop for 5 seconds (vanilla rtl_sdr at Fs=1.8MHz):
    ```
@@ -67,16 +67,16 @@ $ ./build_rtlsdr.sh
    ```
 1. Receive test frames on x86 laptop for 5 seconds (integrated rtl_fsk):
    ```
-   ~/pirip$  Fs=240000; tsecs=5; ./rtl-sdr-blog/build_rtlsdr/src/rtl_fsk -g 49 -f 144490000 - -n $(($Fs*$tsecs)) | codec2/build_linux/src/fsk_put_test_bits -
+   ~/pirip$  Fs=240000; tsecs=5; ./librtlsdr/build_rtlsdr/src/rtl_fsk -g 49 -f 144490000 - -n $(($Fs*$tsecs)) | codec2/build_linux/src/fsk_put_test_bits -
    ```
    Note this is tuned about 10kHz low, to put the two tones above the rtl_sdr DC line.  
-1. Demod GUI Dashboard. Open a new console and start `demod_gui.py`:
+1. Demod GUI Dashboard. Open a new console and start `dash.py`:
    ```
    ~/pirip$ netcat -luk 8001 | ./src/dash.py
    ```
    In another console start the FSK demod:
    ```
-   ~/pirip$ Fs=240000; tsecs=20; ./rtl-sdr-blog/build_rtlsdr/src/rtl_fsk -g 1 -f 144490000 - -n $(($Fs*$tsecs)) -u localhost | codec2/build_linux/src/fsk_put_test_bits -
+   ~/pirip$ Fs=240000; tsecs=20; ./librtlsdr/build_rtlsdr/src/rtl_fsk -g 1 -f 144490000 - -n $(($Fs*$tsecs)) -u localhost | codec2/build_linux/src/fsk_put_test_bits -
    ```
    ![](doc/dash.png)
 1. Automated loopback tests.  Connect your Pi to your RTLSDR via a 60dB attenuator
@@ -95,7 +95,7 @@ $ ./build_rtlsdr.sh
    This example generates 1000 bit/s FSK with a 2000Hz shift:
    ```
    cd codec2/build_linux/src
-   ./fsk_get_test_bits - 60000 | ./fsk_mod -c -a 32767 2 40000 1000 1000 2000 - - | ../misc/tlininterp - t.iq8 100 -d -f
+   ./fsk_get_test_bits - 60000 | ./fsk_mod -c -a 30000 2 40000 1000 1000 2000 - - | ../misc/tlininterp - t.iq8 100 -d -f
    ```
    The output samples are at a sample rate of 4MHz, and a frequency offset of +1 MHz.  They can be played out of the HackRF with:
    ```
@@ -114,7 +114,7 @@ $ ./build_rtlsdr.sh
 
    ```
    A few Octave plot windows will pop up.  Adjust your signal generator frequency so the sine wave is between 2000 and 4000, the
-   script will print the Noise Figure (NF).  Around 6-6.2 dB was obtained using RTL-SDR.COM V3s using"-g 50"
+   script will print the Noise Figure (NF).  Around 6.5 dB was obtained using RTL-SDR.COM V3s using"-g 50"
    
    See also codec2/octave/nf_from_stdio.m and [Measuring SDR Noise Figure in Real Time](http://www.rowetel.com/?page_id=6172).
    
