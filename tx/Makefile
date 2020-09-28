@@ -2,9 +2,9 @@
 
 all: fsk_rpitx
 
-CFLAGS	= -Wall -g -O2 -Wno-unused-variable
+CFLAGS	= -Wall -g -O2 -Wno-unused-variable -I../codec2/src
 CXXFLAGS = -std=c++11 -Wall -g -O2 -Wno-unused-variable
-LDFLAGS = ../librpitx/src/librpitx.a -lm -lrt -lpthread
+LDFLAGS = ../librpitx/src/librpitx.a ../codec2/build_linux/libcodec2.so -lm -lrt -lpthread
 CCP = c++
 CC = cc
 
