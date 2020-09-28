@@ -8,6 +8,7 @@
   [ ] -t -c run without an argument
 */
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,8 +22,10 @@
 #include "freedv_api.h"
 
 // not normally exposed by FreeDV API
+extern "C" {
 int freedv_tx_fsk_ldpc_bits_per_frame(struct freedv *f);
 void freedv_tx_fsk_ldpc_framer(struct freedv *f, uint8_t frame[], uint8_t payload_data[]);
+}
 
 bool running=true;
 
@@ -51,7 +54,7 @@ int main(int argc, char **argv)
     int   log2m;
     float shiftHz = -1;
     ngfmdmasync *fmmod;
-    struct freedv *freedv;
+    struct freedv *freedv = NULL;
     struct freedv_advanced adv;
     int fsk_ldpc = 0;
     int data_bits_per_frame;           // number of payload data bits
@@ -77,8 +80,7 @@ int main(int argc, char **argv)
         switch (opt) {
         case 'a':
             fsk_ldpc = 1;
-            strcpy(adv.codename, optarg);
-            assert(freedv != NULL);
+            adv.codename = optarg;
             break;
         case 'b':
             ldpc_codes_list();
@@ -102,12 +104,12 @@ int main(int argc, char **argv)
         case 't':
             one_zero_test = 1;
             break;
-        default:
+        case 'h':
             fprintf(stderr, usage, argv[0]);
             exit(1);
         }
     }
-    
+
     if (argc < 2) {
         fprintf(stderr, usage, argv[0]);
         exit(1);
@@ -125,11 +127,13 @@ int main(int argc, char **argv)
 
     if (fsk_ldpc) {
         // setup LDPC encoder and framer
-        adv.Fs = 0; adv.Rs = SymbolRate; adv.M = m;
-        freedv = freedv_open_advanced("FSK_LDPC", &adv);
+        adv.Rs = SymbolRate;
+        adv.Fs = 8*SymbolRate; // just required to satisfy freedv_open FSK_LDPC, as we don't run FSK demod here
+        adv.M = m;
+        freedv = freedv_open_advanced(FREEDV_MODE_FSK_LDPC, &adv);
         assert(freedv != NULL);
         data_bits_per_frame = freedv_get_bits_per_modem_frame(freedv);
-        bits_per_frame = freedv_tx_fsk_ldpc_bits_per_frame(f);
+        bits_per_frame = freedv_tx_fsk_ldpc_bits_per_frame(freedv);
         fprintf(stderr, "FSK LDPC mode code: %s data_bits_per_frame: %d\n", adv.codename, data_bits_per_frame);
     } else {
         // uncoded mode
@@ -145,6 +149,8 @@ int main(int argc, char **argv)
     pad.setlevel(7); // Set max power
 
     fprintf(stderr, "Frequency: %4.1f MHz Rs: %4.1f kHz Shift: %4.1f kHz M: %d \n", frequency/1E6, SymbolRate/1E3, shiftHz/1E3, m);
+
+    fprintf(stderr, "data_bits_per_frame: %d bits_per_frame: %d\n", data_bits_per_frame, bits_per_frame);
     
     if ((carrier_test == 0) && (one_zero_test == 0)) { 
         /* regular FSK modulator operation */     
@@ -155,19 +161,19 @@ int main(int argc, char **argv)
             if (BytesRead == data_bits_per_frame) {
                 uint8_t tx_frame[bits_per_frame];
                 if (fsk_ldpc)
-                    freedv_tx_fsk_ldpc_framer(f, tx_frame, data_bits_per_frame);
+                    freedv_tx_fsk_ldpc_framer(freedv, tx_frame, data_bits);
                 else
                     memcpy(tx_frame, data_bits, data_bits_per_frame);
 
-                for(int bit=0; bit<bits_per_frame;) {
+                for(int bit_i=0; bit_i<bits_per_frame;) {
                     /* generate the symbol number from the bit stream, 
                        e.g. 0,1 for 2FSK, 0,1,2,3 for 4FSK */
 
                     int sym = 0;
                     for(int i=m; i>>=1; ) {
-                        uint8_t bit = tx_frame[bit] & 0x1;
+                        uint8_t bit = tx_frame[bit_i] & 0x1;
                         sym = (sym<<1)|bit;
-                        bit++;
+                        bit_i++;
                     }
                     float VCOfreqHz = shiftHz*sym;
                     fmmod->SetFrequencySamples(&VCOfreqHz,1);
@@ -200,7 +206,7 @@ int main(int argc, char **argv)
     }
   
     printf("End of Tx\n");
-    freedv_close(freedv);
+    if (fsk_ldpc) freedv_close(freedv);
     delete fmmod;
     return 0;
 }

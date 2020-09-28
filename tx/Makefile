@@ -2,9 +2,9 @@
 
 all: fsk_rpitx
 
-CFLAGS	= -Wall -g -O2 -Wno-unused-variable -I../codec2/src
-CXXFLAGS = -std=c++11 -Wall -g -O2 -Wno-unused-variable
-LDFLAGS = ../librpitx/src/librpitx.a ../codec2/build_linux/libcodec2.so -lm -lrt -lpthread
+CODEC2_DIR=../codec2/build_linux/src
+CXXFLAGS = -std=c++11 -Wall -g -O2 -Wno-unused-variable -I../codec2/src
+LDFLAGS = ../librpitx/src/librpitx.a $(CODEC2_DIR)/libcodec2.so -Wl,-rpath=$(CODEC2_DIR) -lm -lrt -lpthread
 CCP = c++
 CC = cc
 
