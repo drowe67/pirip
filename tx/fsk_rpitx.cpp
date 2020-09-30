@@ -2,10 +2,7 @@
   fsk_rpitx.cpp
   David Rowe July 2020
 
-  FSK modulates a one bit per char input bit stream using rpitx.
-
-  TODO:
-  [ ] -t -c run without an argument
+  FSK modulates an input bit stream using rpitx.
 */
 
 #include <assert.h>
@@ -115,16 +112,18 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    if (strcmp(argv[optind],"-")==0) {
-        fin = stdin;
-    } else {
-        fin = fopen(argv[optind],"rb");
-        if (fin == NULL) {
-            fprintf(stderr, "Error opening input file: %s\n", argv[optind]);
-            exit(1);
+    if (!(carrier_test || one_zero_test)) {
+        if (strcmp(argv[optind],"-")==0) {
+            fin = stdin;
+        } else {
+            fin = fopen(argv[optind],"rb");
+            if (fin == NULL) {
+                fprintf(stderr, "Error opening input file: %s\n", argv[optind]);
+                exit(1);
+            }
         }
     }
-
+        
     if (fsk_ldpc) {
         // setup LDPC encoder and framer
         adv.Rs = SymbolRate;
