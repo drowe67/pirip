@@ -13,9 +13,9 @@ Currently working on M4 -Over The Air (OTA) tests.
 | M1 | ~~Proof of Concept Physical Layer~~ |
 | M2 | ~~Git repo for project, integrated tx and rx applications~~ |
 | M3 | ~~Simple GUI Dashboard that can be used to tune and debug link~~ |
-| M4 | first OTA tests using uncoded modem |
-| M5 | Pi running Tx and Rx |
-| M6 | Add LDPC FEC to waveform |
+| M4 | ~~first OTA tests using uncoded modem~~ |
+| M5 | ~~Pi running Tx and Rx~~ |
+| M6 | ~~Add LDPC FEC to waveform~~ |
 | M7 | Bidirectional half duplex Tx/Rx on single Pi |
 | M8 | TAP/TUN integration and demo IP link |
 | M9 | Document how to build simple wire antennas |
@@ -128,6 +128,44 @@ $ ./build_rtlsdr.sh
    ./rtl_fsk -s 2400000 -a 80000 -w 500E3 -e ff8 -r 10000 -f 144490000 - -u 192.168.1.100 | ~/pirip/codec2/build_linux/src/fsk_put_test_bits -
 
    ```
+
+1. FSK with LDPC and framer at 1000 bit/s.  On the Pi Tx, we use an external source of test frames:
+   ```
+   $ cd ~/pirip/tx
+   $ ../codec2/build_linux/src/fsk_get_test_bits - 2560 256 | sudo ./fsk_rpitx - --code H_256_512_4 -r 1000 -s 1000
+   ```
+   Laptop Rx:
+   ```
+   $ cd ~/pirip/librtlsdr/build_rtlsdr
+   $ ./src/rtl_fsk -g 49 -f 144490000 - -r 1000 --code  H_256_512_4 -v -u localhost > /dev/null
+   ```
+   In this example we aren't counting errors in the received frames, but you can get some indication from the
+   number of "iters" - if it's just 1 the FEC decoded isn't working very hard.
+   
+1. FSK with LDPC and framer at 10000 bit/s, internal test frames.  On the Pi Tx:
+   ```
+   $ sudo ./fsk_rpitx /dev/zero --code H_256_512_4 -r 10000 -s 10000 --testframes 10
+   ```
+   Laptop Rx:
+   ```
+   $ cd ~/pirip/librtlsdr/build_rtlsdr
+   $ ./src/rtl_fsk -g 1 -f 144490000 - -a 100000 -r 10000 --code  H_256_512_4 -v -u localhost --testframes > /dev/null
+   ```
+   When the Pi transmits a burst, you'll see something like:
+   ```
+   721 nbits:  28 state: 1 uw_loc:  58 uw_err:  5 bad_uw: 0 snrdB:  7.4 eraw:  36 ecdd:   0 iter:   9 pcc: 256 rxst: -BS-
+   722 nbits:  34 state: 1 uw_loc:  58 uw_err:  2 bad_uw: 0 snrdB:  6.4 eraw:  44 ecdd:   0 iter:   9 pcc: 256 rxst: -BS-
+   723 nbits:  40 state: 1 uw_loc:  58 uw_err:  4 bad_uw: 0 snrdB:  7.1 eraw:  46 ecdd:   0 iter:  10 pcc: 256 rxst: -BS-
+   724 nbits:  46 state: 1 uw_loc:  58 uw_err:  3 bad_uw: 0 snrdB:  7.3 eraw:  44 ecdd:   0 iter:   7 pcc: 256 rxst: -BS-
+   725 nbits:   2 state: 1 uw_loc:  58 uw_err:  2 bad_uw: 0 snrdB:  6.8 eraw:  30 ecdd:   0 iter:   5 pcc: 256 rxst: -BS-
+   726 nbits:   8 state: 1 uw_loc:  58 uw_err:  1 bad_uw: 0 snrdB:  6.8 eraw:  55 ecdd:   0 iter:  14 pcc: 256 rxst: -BS-
+   727 nbits:  14 state: 1 uw_loc:  58 uw_err:  3 bad_uw: 0 snrdB:  7.6 eraw:  64 ecdd:   0 iter:  15 pcc: 250 rxst: EBS-
+   728 nbits:  20 state: 1 uw_loc:  58 uw_err:  1 bad_uw: 0 snrdB:  7.5 eraw:  42 ecdd:   0 iter:   8 pcc: 256 rxst: -BS-
+   729 nbits:  26 state: 1 uw_loc:  58 uw_err:  4 bad_uw: 0 snrdB:  6.5 eraw:  52 ecdd:   0 iter:  15 pcc: 253 rxst: EBS-
+   ```
+   In this example the uncoded (raw) errors are getting close to 10%, where this particular code breaks down.  You can tell the
+   FEC decoder is working pretty hard as the number of iterations is close to the maximum of 15, and the parity checks
+   don't always match.  However the coded errors are still zero, although we only received 9/10 packets transmitted.
    
 # Reading Further
 
