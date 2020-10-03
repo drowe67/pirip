@@ -166,6 +166,23 @@ $ ./build_rtlsdr.sh
    In this example the uncoded (raw) errors are getting close to 10%, where this particular code breaks down.  You can tell the
    FEC decoder is working pretty hard as the number of iterations is close to the maximum of 15, and the parity checks
    don't always match.  However the coded errors are still zero, although we only received 9/10 packets transmitted.
+
+1. Calibration of FSK power.  We subsitute a sine wave of the same amplitude (power) as the FSK signal.
+
+   This line generates a sine wave (-t) option which just sets all bits to 0 before FSK modulation:
+   ```
+   $ ./src/fsk_get_test_bits - 60000 | ./src/fsk_mod -t -c -a 30000 2 40000 1000 1000 2000 - - | ./misc/tlininterp - hackrf_tone.iq8 100 -d -f
+   ```
+   Then play using HackRF and measure signal level:
+   ```
+   $ hackrf_transfer -t hackrf_tone.iq8 -s 4E6 -f 143.5E6
+   ```
+
+   We can generate a 1000 bit/s FSK LDPC signal comprising 3 packets with the same power as the test sine wave above using:
+   ```
+   $ ./src/freedv_data_raw_tx -c --testframes 3 --Fs 40000 --Rs 1000 --tone1 1000 --shift 1000 -a 30000 FSK_LDPC /dev/zero - | ./misc/tlininterp - hackrf_rs1000.iq8 100 -d -f
+   $ hackrf_transfer -t hackrf_rs1000.iq8 -s 4E6 -f 143.5E6
+   ```
    
 # Reading Further
 
