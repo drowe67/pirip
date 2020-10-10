@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 #   rtl_fsk modem dashboard
 #
@@ -38,19 +38,29 @@ for line in sys.stdin:
     
     plt.clf()
     plt.subplot(311)
-    Sf = data['Sf']
+    SfdB = data['SfdB']
+    fsk_lower_kHz = np.array(data['fsk_lower_Hz'])/1000
+    fsk_upper_kHz = np.array(data['fsk_upper_Hz'])/1000
     f_est_kHz = np.array(data['f_est_Hz'])/1000
     Fs_kHz = data['Fs_Hz']/1000
-    f_axis_kHz = -Fs_kHz/2 + np.arange(len(Sf))*Fs_kHz/len(Sf)
-    plt.plot(f_axis_kHz, Sf)
+    f_axis_kHz = -Fs_kHz/2 + np.arange(len(SfdB))*Fs_kHz/len(SfdB)
+    plt.plot(f_axis_kHz, SfdB)
+    height = 10;
+    mn = np.min(SfdB);
     for f in f_est_kHz:
-        plt.plot([f, f], [0, 1],"r")
-    plt.ylabel('Freq')
+        plt.plot(f, mn,"r+")
+    plt.plot([fsk_lower_kHz, fsk_lower_kHz], [mn, mn+height],"g")
+    plt.plot([fsk_upper_kHz, fsk_upper_kHz], [mn, mn+height],"g")
+    plt.grid()
+    plt.ylabel('Spectrum')
     
     plt.subplot(312)
+    
     plt.plot(SNRestdB)
     plt.ylabel('SNR')
-    plt.ylim([0, 40])
+    mx = 10*np.ceil(np.max(SNRestdB)/10);
+    plt.ylim([0, mx])
+    plt.grid()
     plt.subplot(313)
     plt.plot(norm_timing)
     plt.ylabel('Timing')
