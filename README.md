@@ -8,17 +8,17 @@ Minimal hardware IP over VHF/UHF Radio using RpiTx and RTLSDRs [1].
 
 Currently working on M4 -Over The Air (OTA) tests.
 
-| Milestone | Description |
-| --- | --- |
+| Milestone | Description | Comment |
+| --- | --- | --- |
 | M1 | ~~Proof of Concept Physical Layer~~ |
 | M2 | ~~Git repo for project, integrated tx and rx applications~~ |
 | M3 | ~~Simple GUI Dashboard that can be used to tune and debug link~~ |
-| M4 | ~~first OTA tests using uncoded modem~~ |
-| M5 | ~~Pi running Tx and Rx~~ |
-| M6 | ~~Add LDPC FEC to waveform~~ |
-| M7 | Bidirectional half duplex Tx/Rx on single Pi |
-| M8 | TAP/TUN integration and demo IP link |
-| M9 | Document how to build simple wire antennas |
+| M4 | ~~first OTA tests using uncoded modem~~ | repeat after recent tuning - demo an OTA link with margin |
+| M5 | ~~Pi running Tx and Rx~~ | Half duplex, loopback demo would be neat |
+| M6 | ~~Add LDPC FEC to waveform~~ | Needs to be tested/tuned OTA |
+| M7 | Bidirectional half duplex Tx/Rx on single Pi | For example two Pis ping-ponging frames at each other | 
+| M8 | TAP/TUN integration and demo IP link | What protocol? |
+| M9 | Document how to build simple wire antennas | |
 
 # Building
 
@@ -183,13 +183,53 @@ $ ./build_rtlsdr.sh
    $ ./src/freedv_data_raw_tx -c --testframes 3 --Fs 40000 --Rs 1000 --tone1 1000 --shift 1000 -a 30000 FSK_LDPC /dev/zero - | ./misc/tlininterp - hackrf_rs1000.iq8 100 -d -f
    $ hackrf_transfer -t hackrf_rs1000.iq8 -s 4E6 -f 143.5E6
    ```
+
+1. Command lines for 4FSK MDS tests.  Generate Rs=1000 4FSK signal, then play with HackRF:
+   ```
+   $ ./src/freedv_data_raw_tx -c --testframes 10 --burst 10 --Fs 40000 --Rs 1000 --tone1 1000 --shift 2000 -m 4 -a 30000 FSK_LDPC /dev/zero - | ./misc/tlininterp - hackrf_rs1000m4.iq8 100 -d -f
+   $ hackrf_transfer -t hackrf_rs1000m4.iq8 -s 4E6 -f 143.5E6
+   ```
+   Calibration tone of same amplitude was used to check level (command line above).  The run Rx with:
+   ```
+   $ cd ~/pirip/librtlsdr/build_rtlsdr
+   $ ./src/rtl_fsk -g 49 -f 144490000 - -r 1000 -m 4 --code  H_256_512_4 -v -u localhost --testframes --mask 2000 -e 0xfff > /dev/null
+   <snip>
+   89 nbits:   0 st: 1 uwloc: 488 uwerr:  3 bad_uw: 0 snrdB:  8.0 eraw:  50 ecdd:   0 iter:  15 pcc: 253 seq: 172 rxst: -BS-
+   90 nbits:  56 st: 1 uwloc: 488 uwerr:  2 bad_uw: 0 snrdB:  7.7 eraw:  41 ecdd:   0 iter:   7 pcc: 256 seq: 172 rxst: -BS-
+   91 nbits:  12 st: 1 uwloc: 488 uwerr:  5 bad_uw: 0 snrdB:  7.4 eraw:  34 ecdd:   0 iter:   7 pcc: 256 seq: 172 rxst: -BS-
+   ```
    
+   Notes:
+   1. You can monitor the signal using the dashboard if you like.
+   1. The `--mask` freq estimator and full gain '-e 0xfff` in each of the RTLSDR stages is used, to get the best Noise Figure (NF).
+   1. The Tx line generates 10 bursts of 10 packets each.  Acquisition at the start of bursts is tough, so this gives the system a good work out.  4FSK at 1000 symbols/second is used, which is a raw bit rate of 2000 bits/s.  However a rate 0.5 code is used, so the information rate is 1000 bits/s.
+   1. In this example 91 packets were received, of 100 sent, a Packet Error Rate (PER) of 10%.  The Rx level was -131dBm, the
+      theoretical Rx level for 10% PER is Eb/No + 10*log10(Rbinfo) + NF - 174 = 6 + 10*log10(1000) + 6 - 174 = -132dBm.
+   1. The HackRF is a convenient trasmitter for low level testing as the output level is low, which reduces experimental hassles with strong RF signals on the bench.  The RpiTx based Tx could also be used if care was taken with shielding.
+   1. The tlininterp program use a simple linear interpolator to bring the sample rate of the signal up to the 4MSps required by the HackRF (100kHz*40 = 4MHz).  The oversampling arugment (100 in this example) needs to change if the sample rate of the `freedv_data_raw_tx` (100kHz) changes.
+
+1. Here is an example with Rs=10kHz, Tx:
+   ```
+   $ ./src/freedv_data_raw_tx -c --testframes 10 --burst 10 --Fs 100000 --Rs 10000 --tone1 10000 --shift 10000 -m 4 -a 30000 FSK_LDPC /dev/zero - | ./misc/tlininterp - hackrf_rs10000m4.iq8 40 -d -f
+   $ hackrf_transfer -t hackrf_rs10000m4.iq8 -s 4E6 -f 143.5E6
+   ```
+   Rx:
+   ```
+   $ ./src/rtl_fsk -g 49 -f 144490000 - -a 200000 -r 10000 -m 4 --code  H_256_512_4 -v -u localhost --testframes --mask 10000 -e 0xfff > /dev/null
+   ```
+   Notes:
+   1. This didn't work quite as well as the Rs=1000 example above, the 90% PER was at -120dB, theory suggests -122dBm.  Some tests traced this to the tight spacing (Rs=10kHz), with a 2Rs=20kHz tone spacing, an extra dB was obtained.  So some tuning is required.
+   1. We used a 200kHz sample rate to easily fit the 4 tones into the positive 100kHz side.  I'm avoiding the RTLSDR DC line at
+      the moment.
+   1. Still, it's very nice to see 10 kbit/s moving through the system.  A nice milestone.
+
 # Reading Further
 
 1. [Open IP over VHF/UHF 1](http://www.rowetel.com/?p=7207) - Blog post introducing this project
 1. [Open IP over VHF/UHF 2](http://www.rowetel.com/?p=7334) - Second blog post on uncoded OTA tests
-1. [Previous Codec 2 PR discussing this project](https://github.com/drowe67/codec2/pull/125)
+1. [Codec 2 FSK Raw Data Modes](https://github.com/drowe67/codec2/blob/master/README_data.md)
 1. [Codec 2 FSK Modem](https://github.com/drowe67/codec2/blob/master/README_fsk.md)
+1. [Previous Codec 2 PR discussing this project](https://github.com/drowe67/codec2/pull/125)
 1. [RpiTx](https://github.com/F5OEO/rpitx) - Radio transmitter software for Raspberry Pis
 1. [rtlsdr driver](https://github.com/librtlsdr/librtlsdr) - Our rtlsdr driver is forked from this fine repo. 
 1. [Measuring SDR Noise Figure in Real Time](http://www.rowetel.com/?page_id=6172)
