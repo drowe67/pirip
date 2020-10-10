@@ -3,6 +3,12 @@
   David Rowe July 2020
 
   FSK modulates an input bit stream using rpitx.
+
+  TODO:
+  [ ] decide if we should have packet bytes input data
+  [ ] if so, need a way to send uncoded test packets as per examples in README.md
+  [ ] Something wrong at Rs<200, e.g. Rx can't detect any packets at Rs=100
+  [ ] test link with other codes
 */
 
 #include <assert.h>
@@ -23,6 +29,9 @@ extern "C" {
 int freedv_tx_fsk_ldpc_bits_per_frame(struct freedv *f);
 void freedv_tx_fsk_ldpc_framer(struct freedv *f, uint8_t frame[], uint8_t payload_data[]);
 void ofdm_generate_payload_data_bits(uint8_t payload_data_bits[], int n);
+unsigned short freedv_gen_crc16(unsigned char* data_p, int length);
+void freedv_pack(unsigned char *bytes, unsigned char *bits, int nbits);
+void freedv_unpack(unsigned char *bits, unsigned char *bytes, int nbits);
 }
 
 bool running=true;
@@ -194,20 +203,36 @@ int main(int argc, char **argv)
     if ((carrier_test == 0) && (one_zero_test == 0)) { 
         /* regular FSK modulator operation */     
 
-        /* pre-amble */
-        int np = 100;
-        uint8_t preamble_bits[np];
-        for(int i=0; i<np; i++) preamble_bits[i] = rand() % 0x1;
-        modulate_frame(fmmod, shiftHz, m, preamble_bits, np);
+        /* pre-amble TODO: reconcile this with same code in freedv_fsk.c */
+        int npreamble_symbols = 50*(m>>1);
+        int npreamble_bits = npreamble_symbols*(m>>1);
+        uint8_t preamble_bits[npreamble_bits];
+        // cycle through all 2 and 4FSK symbols, not sure if this is better than random
+        int sym = 0;
+        for(int i=0; i<npreamble_bits; i+=2) {
+            preamble_bits[i]   = (sym>>1) & 0x1;
+            preamble_bits[i+1] = sym & 0x1;
+            sym += 1;
+        }
+        modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
         
         while(running) {
             uint8_t data_bits[data_bits_per_frame];
             int BytesRead = fread(data_bits, sizeof(uint8_t), data_bits_per_frame, fin);
-            if (BytesRead == data_bits_per_frame) {
+            if (BytesRead == (data_bits_per_frame)) {
                 if (testframes) {
                     /* replace input data with testframe */
                     ofdm_generate_payload_data_bits(data_bits, data_bits_per_frame);
                 }
+
+                /* calculate and insert CRC in the last 16 bit sof data_bits[] */
+                assert((data_bits_per_frame % 8) == 0);
+                int data_bytes_per_frame = data_bits_per_frame / 8;
+                uint8_t data_bytes[data_bytes_per_frame];
+                freedv_pack(data_bytes, data_bits, data_bits_per_frame-16);
+                uint16_t crc16 = freedv_gen_crc16(data_bytes, data_bytes_per_frame-2);
+                uint8_t crc16_bytes[] = { (uint8_t)(crc16 >> 8), (uint8_t)(crc16 & 0xff) };
+                freedv_unpack(data_bits+data_bits_per_frame-16, crc16_bytes, 16);
                 uint8_t tx_frame[bits_per_frame];
                 if (fsk_ldpc)
                     freedv_tx_fsk_ldpc_framer(freedv, tx_frame, data_bits);
@@ -221,9 +246,6 @@ int main(int argc, char **argv)
             if (testframes)
                 if (frames >= Nframes) running = false;
         }
-
-        /* post-amble */
-        modulate_frame(fmmod, shiftHz, m, preamble_bits, np);
     }
 
     if (carrier_test) {
@@ -245,8 +267,16 @@ int main(int argc, char **argv)
             fmmod->SetFrequencySamples(&VCOfreqHz,1);
         }
     }
-  
+
+    // this was required to prevent errors on final frame, I suspect
+    // as fmmod FIFO hasn't emptied by the time we delete fmmod.
+    // Seems a bit wasteful, so there might be a better way
+
+    float VCOfreqHz = 0;
+    for(int i=0; i<50; i++)
+        fmmod->SetFrequencySamples(&VCOfreqHz,1);
     printf("End of Tx\n");
+  
     if (fsk_ldpc) freedv_close(freedv);
     delete fmmod;
     return 0;
