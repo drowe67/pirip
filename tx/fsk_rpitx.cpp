@@ -19,12 +19,15 @@
 #include <math.h>
 #include <signal.h>
 #include <getopt.h>
+ #include <unistd.h>
 
 #include "../librpitx/src/librpitx.h"
 #include "ldpc_codes.h"
 #include "freedv_api.h"
 
-// not normally exposed by FreeDV API
+#define MAX_CHAR 256
+
+// Functions to build FSK_LDPC frame.  Not normally exposed by FreeDV API
 extern "C" {
 int freedv_tx_fsk_ldpc_bits_per_frame(struct freedv *f);
 void freedv_tx_fsk_ldpc_framer(struct freedv *f, uint8_t frame[], uint8_t payload_data[]);
@@ -45,6 +48,19 @@ static void terminate(int num) {
 }
 
 
+/* Use the Linux /sys/class/gpio system to access the RPis GPIOs */
+void sys_gpio(const char filename[], const char s[]) {
+    FILE *fgpio = fopen(filename, "wt");
+    fprintf(stderr,"%s %s\n",filename, s);
+    if (fgpio == NULL) {
+      fprintf(stderr, "\nProblem opening %s\n", filename);
+        exit(1);
+    }
+    fprintf(fgpio,"%s",s);
+    fclose(fgpio);
+}
+
+
 void modulate_frame(ngfmdmasync *fmmod, float shiftHz, int m, uint8_t tx_frame[], int bits_per_frame) {
     for(int bit_i=0; bit_i<bits_per_frame;) {
         /* generate the symbol number from the bit stream, 
@@ -60,6 +76,7 @@ void modulate_frame(ngfmdmasync *fmmod, float shiftHz, int m, uint8_t tx_frame[]
         fmmod->SetFrequencySamples(&VCOfreqHz,1);
     }
 }
+
 
 int main(int argc, char **argv)
 {
@@ -88,10 +105,13 @@ int main(int argc, char **argv)
     int testframes = 0;
     int Nframes = 0;
     int frames = 0;
-    
+    char ant_switch_gpio[128] = "";
+    char ant_switch_gpio_path[MAX_CHAR] = "";
+
     char usage[] = "usage: %s [-m fskM 2|4] [-f carrierFreqHz] [-r symbRateHz] [-s shiftHz] [-t] [-c] "
                    "[--testframes Nframes] InputOneBitPerCharFile\n"
                    "  -c               Carrier test mode\n"
+                   "  -g               GPIO that controls antenna Tx/Rx switch\n"
                    "  -t               ...0101010... FSK test mode\n"
                    "  --code CodeName  Use LDPC code CodeName\n"
                    "  --listcodes      List available LDPC codes\n"
@@ -113,7 +133,7 @@ int main(int argc, char **argv)
             {0, 0, 0, 0}
         };
         
-        opt = getopt_long(argc,argv,"a:bm:f:r:s:tcu:",long_opts,&opt_idx);
+        opt = getopt_long(argc,argv,"a:bcf:gm:r:s:tu:",long_opts,&opt_idx);
         
         switch (opt) {
         case 'a':
@@ -150,6 +170,17 @@ int main(int argc, char **argv)
             testframes = 1;
             Nframes = atoi(optarg);
             fprintf(stderr, "Sending %d testframes...\n", Nframes);
+            break;
+        case 'g':
+            strcpy(ant_switch_gpio, optarg);
+            sys_gpio("/sys/class/gpio/unexport", ant_switch_gpio);
+            sys_gpio("/sys/class/gpio/export", ant_switch_gpio);
+            usleep(100*1000); /* short delay so OS can create the next device */
+            char tmp[MAX_CHAR];
+            sprintf(tmp,"/sys/class/gpio/gpio%s/direction", ant_switch_gpio);
+            sys_gpio(tmp, "out");
+            sprintf(ant_switch_gpio_path,"/sys/class/gpio/gpio%s/value", ant_switch_gpio);
+            sys_gpio(ant_switch_gpio_path, "0");
             break;
         case 'h':
             fprintf(stderr, usage, argv[0]);
@@ -193,9 +224,7 @@ int main(int argc, char **argv)
     if (shiftHz == -1)
         shiftHz = 2*SymbolRate;
     fmmod = new ngfmdmasync(frequency,SymbolRate,14,100); 	
-    padgpio pad;
-    pad.setlevel(7); // Set max power
-
+    
     fprintf(stderr, "Frequency: %4.1f MHz Rs: %4.1f kHz Shift: %4.1f kHz M: %d \n", frequency/1E6, SymbolRate/1E3, shiftHz/1E3, m);
 
     fprintf(stderr, "data_bits_per_frame: %d bits_per_frame: %d\n", data_bits_per_frame, bits_per_frame);
@@ -250,9 +279,17 @@ int main(int argc, char **argv)
 
     if (carrier_test) {
         fprintf(stderr, "Carrier test mode, Ctrl-C to exit\n");
+        int count = 0;
         float VCOfreqHz = 0;
         while(running) {
             fmmod->SetFrequencySamples(&VCOfreqHz,1);
+            count++;
+            if (count == SymbolRate)
+                fmmod->clkgpio::disableclk(4);
+            if (count == 2*SymbolRate) {
+                fmmod->clkgpio::enableclk(4);
+                count = 0;
+            }
         }
     }
 
@@ -279,6 +316,11 @@ int main(int argc, char **argv)
   
     if (fsk_ldpc) freedv_close(freedv);
     delete fmmod;
+
+    if (*ant_switch_gpio) {
+        sys_gpio(ant_switch_gpio_path, "0");
+        sys_gpio("/sys/class/gpio/unexport", ant_switch_gpio);
+    }
     return 0;
 }
 	
