@@ -223,6 +223,15 @@ $ ./build_rtlsdr.sh
       the moment.
    1. Still, it's very nice to see 10 kbit/s moving through the system.  A nice milestone.
 
+1. Using a GPIO to control an antenna Tx/Rx pin diode switch on GPIO 21 (4FSK at 10k symbs/s):
+   ```
+   sudo ./fsk_rpitx /dev/zero --code H_256_512_4 -r 10000 -s 10000 --testframes 10 --bursts 10 --seq -g 21 -m 4
+   ```
+   Rx on laptop:
+   ```
+   ./src/rtl_fsk -g 30 -f 144490000 - -r 10000 -m 2 -a 180000 --code H_256_512_4 -v -u localhost --testframes -m 4 --mask 10000 > /dev/null
+   ```
+   
 # Reading Further
 
 1. [Open IP over VHF/UHF 1](http://www.rowetel.com/?p=7207) - Blog post introducing this project
