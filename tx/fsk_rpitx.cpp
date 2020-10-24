@@ -19,7 +19,7 @@
 #include <math.h>
 #include <signal.h>
 #include <getopt.h>
- #include <unistd.h>
+#include <unistd.h>
 
 #include "../librpitx/src/librpitx.h"
 #include "ldpc_codes.h"
@@ -51,7 +51,7 @@ static void terminate(int num) {
 /* Use the Linux /sys/class/gpio system to access the RPis GPIOs */
 void sys_gpio(const char filename[], const char s[]) {
     FILE *fgpio = fopen(filename, "wt");
-    fprintf(stderr,"%s %s\n",filename, s);
+    //fprintf(stderr,"%s %s\n",filename, s);
     if (fgpio == NULL) {
       fprintf(stderr, "\nProblem opening %s\n", filename);
         exit(1);
@@ -60,6 +60,16 @@ void sys_gpio(const char filename[], const char s[]) {
     fclose(fgpio);
 }
 
+// calculate and insert CRC in the last 16 bits of (unpacked) data_bits[]
+void calculate_and_insert_crc(uint8_t data_bits[], int data_bits_per_frame) {            
+    assert((data_bits_per_frame % 8) == 0);
+    int data_bytes_per_frame = data_bits_per_frame / 8;
+    uint8_t data_bytes[data_bytes_per_frame];
+    freedv_pack(data_bytes, data_bits, data_bits_per_frame-16);
+    uint16_t crc16 = freedv_gen_crc16(data_bytes, data_bytes_per_frame-2);
+    uint8_t crc16_bytes[] = { (uint8_t)(crc16 >> 8), (uint8_t)(crc16 & 0xff) };
+    freedv_unpack(data_bits+data_bits_per_frame-16, crc16_bytes, 16);
+}
 
 void modulate_frame(ngfmdmasync *fmmod, float shiftHz, int m, uint8_t tx_frame[], int bits_per_frame) {
     for(int bit_i=0; bit_i<bits_per_frame;) {
@@ -104,7 +114,7 @@ int main(int argc, char **argv)
     int bits_per_frame;                // total number of bits including UW, payload data, parity bits for FSK + LDPC mode
     int testframes = 0;
     int Nframes = 0;
-    int frames = 0;
+    int Nbursts = 1;
     char ant_switch_gpio[128] = "";
     char ant_switch_gpio_path[MAX_CHAR] = "";
 
@@ -115,7 +125,8 @@ int main(int argc, char **argv)
                    "  -t               ...0101010... FSK test mode\n"
                    "  --code CodeName  Use LDPC code CodeName\n"
                    "  --listcodes      List available LDPC codes\n"
-                   "  --testframes     built in testframes\n"
+                   "  --testframes N   Send N testframes per burst\n"
+                   "  --bursts     B   Send B bursts of N testframes (default 1)\n"
                    "\n"
                    " Example 1, send 10000 bits of (100 bit) tests frames from external test frame generator\n"
                    " at 1000 bits/s using 2FSK:\n\n"
@@ -130,10 +141,11 @@ int main(int argc, char **argv)
             {"code",      required_argument, 0, 'a'},
             {"listcodes", no_argument,       0, 'b'},
             {"testframes",required_argument, 0, 'u'},
+            {"bursts",    required_argument, 0, 'e'},
             {0, 0, 0, 0}
         };
         
-        opt = getopt_long(argc,argv,"a:bcf:gm:r:s:tu:",long_opts,&opt_idx);
+        opt = getopt_long(argc,argv,"a:bce:f:g:m:r:s:tu:",long_opts,&opt_idx);
         
         switch (opt) {
         case 'a':
@@ -146,6 +158,9 @@ int main(int argc, char **argv)
             break;
         case 'c':
             carrier_test = 1;
+            break;
+        case 'e':
+            Nbursts = atoi(optarg);
             break;
         case 'm':
             m = atoi(optarg);
@@ -204,6 +219,10 @@ int main(int argc, char **argv)
         }
     }
         
+    int npreamble_symbols = 50*(m>>1);
+    int npreamble_bits = npreamble_symbols*(m>>1);
+    uint8_t preamble_bits[npreamble_bits];
+
     if (fsk_ldpc) {
         // setup LDPC encoder and framer
         adv.Rs = SymbolRate;
@@ -214,7 +233,18 @@ int main(int argc, char **argv)
         data_bits_per_frame = freedv_get_bits_per_modem_frame(freedv);
         bits_per_frame = freedv_tx_fsk_ldpc_bits_per_frame(freedv);
         fprintf(stderr, "FSK LDPC mode code: %s data_bits_per_frame: %d\n", adv.codename, data_bits_per_frame);
-     } else {
+
+        /* set up preamble */
+        /* TODO: this should be a freeDV API function */        
+        // cycle through all 2 and 4FSK symbols, not sure if this is better than random
+        int sym = 0;
+        for(int i=0; i<npreamble_bits; i+=2) {
+            preamble_bits[i]   = (sym>>1) & 0x1;
+            preamble_bits[i+1] = sym & 0x1;
+            sym += 1;
+        }
+
+    } else {
         // uncoded mode
         data_bits_per_frame = log2(m);
         bits_per_frame = data_bits_per_frame;
@@ -226,59 +256,83 @@ int main(int argc, char **argv)
     fmmod = new ngfmdmasync(frequency,SymbolRate,14,100); 	
     
     fprintf(stderr, "Frequency: %4.1f MHz Rs: %4.1f kHz Shift: %4.1f kHz M: %d \n", frequency/1E6, SymbolRate/1E3, shiftHz/1E3, m);
-
     fprintf(stderr, "data_bits_per_frame: %d bits_per_frame: %d\n", data_bits_per_frame, bits_per_frame);
     
-    if ((carrier_test == 0) && (one_zero_test == 0)) { 
-        /* regular FSK modulator operation */     
+    if ((carrier_test == 0) && (one_zero_test == 0)) {
+        // FSK Tx --------------------------------------------------------------------
 
-        /* pre-amble TODO: reconcile this with same code in freedv_fsk.c */
-        int npreamble_symbols = 50*(m>>1);
-        int npreamble_bits = npreamble_symbols*(m>>1);
-        uint8_t preamble_bits[npreamble_bits];
-        // cycle through all 2 and 4FSK symbols, not sure if this is better than random
-        int sym = 0;
-        for(int i=0; i<npreamble_bits; i+=2) {
-            preamble_bits[i]   = (sym>>1) & 0x1;
-            preamble_bits[i+1] = sym & 0x1;
-            sym += 1;
-        }
-        modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
+        uint8_t data_bits[data_bits_per_frame];
+        uint8_t tx_frame[bits_per_frame];
+
+        if (testframes) {
+            /* FSK_LDPC Tx in test frame mode */
+
+            assert(fsk_ldpc);
+            ofdm_generate_payload_data_bits(data_bits, data_bits_per_frame);
+            calculate_and_insert_crc(data_bits, data_bits_per_frame);            
+            freedv_tx_fsk_ldpc_framer(freedv, tx_frame, data_bits);
+
+            // antenna switch to Tx
+            if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
+            
+            for(int b=0; b<Nbursts; b++) {
+
+                // transmitter carrier on
+                fmmod->clkgpio::enableclk(4);
+
+                // send pre-amble at start of burst
+                modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
         
-        while(running) {
-            uint8_t data_bits[data_bits_per_frame];
-            int BytesRead = fread(data_bits, sizeof(uint8_t), data_bits_per_frame, fin);
-            if (BytesRead == (data_bits_per_frame)) {
-                if (testframes) {
-                    /* replace input data with testframe */
-                    ofdm_generate_payload_data_bits(data_bits, data_bits_per_frame);
+                for (int f=0; f<Nframes; f++) {
+                    modulate_frame(fmmod, shiftHz, m, tx_frame, bits_per_frame);
+
+                    // allow early exit on Crtl-C
+                    if (!running) goto finished;
                 }
 
-                /* calculate and insert CRC in the last 16 bit sof data_bits[] */
-                assert((data_bits_per_frame % 8) == 0);
-                int data_bytes_per_frame = data_bits_per_frame / 8;
-                uint8_t data_bytes[data_bytes_per_frame];
-                freedv_pack(data_bytes, data_bits, data_bits_per_frame-16);
-                uint16_t crc16 = freedv_gen_crc16(data_bytes, data_bytes_per_frame-2);
-                uint8_t crc16_bytes[] = { (uint8_t)(crc16 >> 8), (uint8_t)(crc16 & 0xff) };
-                freedv_unpack(data_bits+data_bits_per_frame-16, crc16_bytes, 16);
-                uint8_t tx_frame[bits_per_frame];
-                if (fsk_ldpc)
-                    freedv_tx_fsk_ldpc_framer(freedv, tx_frame, data_bits);
-                else
-                    memcpy(tx_frame, data_bits, data_bits_per_frame);
-                modulate_frame(fmmod, shiftHz, m, tx_frame, bits_per_frame);
+                // TODO: try to determine when FIFO is empty instead of arbitrary delay
+                float VCOfreqHz = 0;
+                for(int i=0; i<50; i++)
+                    fmmod->SetFrequencySamples(&VCOfreqHz,1);
+                printf("End of this burst\n");
+                
+                // transmitter carrier off between bursts
+                fmmod->clkgpio::disableclk(4);
+ 
+                // Two frames delay so we have some interpacket silence
+                float tdelay = (2.0/SymbolRate)*bits_per_frame/(m>>1);
+                usleep((int)(tdelay*1E6));
+           }
+
+            // antenna switch to Rx
+            if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");
+        }
+        else {
+            /* regular FSK or FSK_LDPC Tx operation with bits/bytes from stdin */     
+
+            if (fsk_ldpc)
+                modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
+        
+            while(running) {
+                int BytesRead = fread(data_bits, sizeof(uint8_t), data_bits_per_frame, fin);
+                if (BytesRead == (data_bits_per_frame)) {
+                    if (fsk_ldpc) {
+                        calculate_and_insert_crc(data_bits, data_bits_per_frame);            
+                        freedv_tx_fsk_ldpc_framer(freedv, tx_frame, data_bits);
+                    }
+                    else {
+                        memcpy(tx_frame, data_bits, data_bits_per_frame);
+                    }
+                    modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
+                } else {
+                    running=false;
+                }
             }
-            else
-                running=false;
-            frames++;
-            if (testframes)
-                if (frames >= Nframes) running = false;
         }
     }
 
     if (carrier_test) {
-        fprintf(stderr, "Carrier test mode, Ctrl-C to exit\n");
+        fprintf(stderr, "Carrier test mode 1 sec on/off , Ctrl-C to exit\n");
         int count = 0;
         float VCOfreqHz = 0;
         while(running) {
@@ -305,6 +359,8 @@ int main(int argc, char **argv)
         }
     }
 
+    finished:
+    
     // this was required to prevent errors on final frame, I suspect
     // as fmmod FIFO hasn't emptied by the time we delete fmmod.
     // Seems a bit wasteful, so there might be a better way
