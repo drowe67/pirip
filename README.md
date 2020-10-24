@@ -232,6 +232,30 @@ $ ./build_rtlsdr.sh
    ./src/rtl_fsk -g 30 -f 144490000 - -r 10000 -m 2 -a 180000 --code H_256_512_4 -v -u localhost --testframes -m 4 --mask 10000 > /dev/null
    ```
    
+   Notes:
+   1. You can monitor the signal using the dashboard if you like.
+   1. The `--mask` freq estimator and full gain '-e 0xfff` in each of the RTLSDR stages is used, to get the best Noise Figure (NF).
+   1. The Tx line generates 10 bursts of 10 packets each.  Acquisition at the start of bursts is tough, so this gives the system a good work out.  4FSK at 1000 symbols/second is used, which is a raw bit rate of 2000 bits/s.  However a rate 0.5 code is used, so the information rate is 1000 bits/s.
+   1. In this example 91 packets were received, of 100 sent, a Packet Error Rate (PER) of 10%.  The Rx level was -131dBm, the
+      theoretical Rx level for 10% PER is Eb/No + 10*log10(Rbinfo) + NF - 174 = 6 + 10*log10(1000) + 6 - 174 = -132dBm.
+   1. The HackRF is a convenient trasmitter for low level testing as the output level is low, which reduces experimental hassles with strong RF signals on the bench.  The RpiTx based Tx could also be used if care was taken with shielding.
+   1. The tlininterp program use a simple linear interpolator to bring the sample rate of the signal up to the 4MSps required by the HackRF (100kHz*40 = 4MHz).  The oversampling arugment (100 in this example) needs to change if the sample rate of the `freedv_data_raw_tx` (100kHz) changes.
+
+1. Here is an example with Rs=10kHz, Tx:
+   ```
+   $ ./src/freedv_data_raw_tx -c --testframes 10 --burst 10 --Fs 100000 --Rs 10000 --tone1 10000 --shift 10000 -m 4 -a 30000 FSK_LDPC /dev/zero - | ./misc/tlininterp - hackrf_rs10000m4.iq8 40 -d -f
+   $ hackrf_transfer -t hackrf_rs10000m4.iq8 -s 4E6 -f 143.5E6
+   ```
+   Rx:
+   ```
+   $ ./src/rtl_fsk -g 49 -f 144490000 - -a 200000 -r 10000 -m 4 --code  H_256_512_4 -v -u localhost --testframes --mask 10000 -e 0xfff > /dev/null
+   ```
+   Notes:
+   1. This didn't work quite as well as the Rs=1000 example above, the 90% PER was at -120dB, theory suggests -122dBm.  Some tests traced this to the tight spacing (Rs=10kHz), with a 2Rs=20kHz tone spacing, an extra dB was obtained.  So some tuning is required.
+   1. We used a 200kHz sample rate to easily fit the 4 tones into the positive 100kHz side.  I'm avoiding the RTLSDR DC line at
+      the moment.
+   1. Still, it's very nice to see 10 kbit/s moving through the system.  A nice milestone.
+
 # Reading Further
 
 1. [Open IP over VHF/UHF 1](http://www.rowetel.com/?p=7207) - Blog post introducing this project
