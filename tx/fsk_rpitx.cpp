@@ -25,7 +25,8 @@
 #include "ldpc_codes.h"
 #include "freedv_api.h"
 
-#define MAX_CHAR 256
+#define MAX_CHAR  256
+#define FIFO_SIZE 100
 
 // Functions to build FSK_LDPC frame.  Not normally exposed by FreeDV API
 extern "C" {
@@ -115,6 +116,7 @@ int main(int argc, char **argv)
     int testframes = 0;
     int Nframes = 0;
     int Nbursts = 1;
+    int sequence_numbers = 0;
     char ant_switch_gpio[128] = "";
     char ant_switch_gpio_path[MAX_CHAR] = "";
 
@@ -127,6 +129,7 @@ int main(int argc, char **argv)
                    "  --listcodes      List available LDPC codes\n"
                    "  --testframes N   Send N testframes per burst\n"
                    "  --bursts     B   Send B bursts of N testframes (default 1)\n"
+                   "  --seq            send packet sequence numbers (breaks testframe BER counting)\n"
                    "\n"
                    " Example 1, send 10000 bits of (100 bit) tests frames from external test frame generator\n"
                    " at 1000 bits/s using 2FSK:\n\n"
@@ -142,11 +145,12 @@ int main(int argc, char **argv)
             {"listcodes", no_argument,       0, 'b'},
             {"testframes",required_argument, 0, 'u'},
             {"bursts",    required_argument, 0, 'e'},
-            {0, 0, 0, 0}
+            {"seq",       no_argument,       0, 'q'},
+           {0, 0, 0, 0}
         };
         
-        opt = getopt_long(argc,argv,"a:bce:f:g:m:r:s:tu:",long_opts,&opt_idx);
-        
+        opt = getopt_long(argc,argv,"a:bce:f:g:m:qr:s:tu:",long_opts,&opt_idx);
+
         switch (opt) {
         case 'a':
             fsk_ldpc = 1;
@@ -167,6 +171,9 @@ int main(int argc, char **argv)
             break;
         case 'f':
             frequency = atof(optarg);
+            break;
+        case 'q':
+            sequence_numbers = 1;
             break;
         case 'r':
             SymbolRate = atof(optarg);
@@ -198,6 +205,7 @@ int main(int argc, char **argv)
             sys_gpio(ant_switch_gpio_path, "0");
             break;
         case 'h':
+        case '?':
             fprintf(stderr, usage, argv[0]);
             exit(1);
         }
@@ -253,7 +261,7 @@ int main(int argc, char **argv)
     // Set shiftHz at 2*Rs if no command line argument
     if (shiftHz == -1)
         shiftHz = 2*SymbolRate;
-    fmmod = new ngfmdmasync(frequency,SymbolRate,14,100); 	
+    fmmod = new ngfmdmasync(frequency,SymbolRate,14,FIFO_SIZE); 	
     
     fprintf(stderr, "Frequency: %4.1f MHz Rs: %4.1f kHz Shift: %4.1f kHz M: %d \n", frequency/1E6, SymbolRate/1E3, shiftHz/1E3, m);
     fprintf(stderr, "data_bits_per_frame: %d bits_per_frame: %d\n", data_bits_per_frame, bits_per_frame);
@@ -269,8 +277,6 @@ int main(int argc, char **argv)
 
             assert(fsk_ldpc);
             ofdm_generate_payload_data_bits(data_bits, data_bits_per_frame);
-            calculate_and_insert_crc(data_bits, data_bits_per_frame);            
-            freedv_tx_fsk_ldpc_framer(freedv, tx_frame, data_bits);
 
             // antenna switch to Tx
             if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
@@ -284,23 +290,33 @@ int main(int argc, char **argv)
                 modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
         
                 for (int f=0; f<Nframes; f++) {
+                    // optional injection of sequence numbers to help locate bad frames
+                    if (sequence_numbers) {
+                        int seq = (f+1) & 0xff;
+                        for (int i=0; i<8; i++) 
+                            data_bits[i] = (seq >> (7-i)) & 0x1;
+                    }
+
+                    calculate_and_insert_crc(data_bits, data_bits_per_frame);
+                    freedv_tx_fsk_ldpc_framer(freedv, tx_frame, data_bits);
                     modulate_frame(fmmod, shiftHz, m, tx_frame, bits_per_frame);
 
                     // allow early exit on Crtl-C
                     if (!running) goto finished;
                 }
 
-                // TODO: try to determine when FIFO is empty instead of arbitrary delay
-                float VCOfreqHz = 0;
-                for(int i=0; i<50; i++)
-                    fmmod->SetFrequencySamples(&VCOfreqHz,1);
+                // wait for enough time for FIFO to empty
+                int bufferSamples = FIFO_SIZE - fmmod->GetBufferAvailable();
+                float tdelay = (float)bufferSamples/SymbolRate;
+                usleep((int)(tdelay*1E6));
+
                 printf("End of this burst\n");
                 
                 // transmitter carrier off between bursts
                 fmmod->clkgpio::disableclk(4);
  
                 // Two frames delay so we have some interpacket silence
-                float tdelay = (2.0/SymbolRate)*bits_per_frame/(m>>1);
+                tdelay = (2.0/SymbolRate)*bits_per_frame/(m>>1);
                 usleep((int)(tdelay*1E6));
            }
 
