@@ -224,9 +224,19 @@ $ ./build_rtlsdr.sh
    1. Still, it's very nice to see 10 kbit/s moving through the system.  A nice milestone.
 
 1. Using a GPIO to control an antenna Tx/Rx pin diode switch on GPIO 21 (4FSK at 10k symbs/s):
-   ```
-   sudo ./fsk_rpitx /dev/zero --code H_256_512_4 -r 10000 -s 10000 --testframes 10 --bursts 10 --seq -g 21 -m 4
-   ```
+
+   1. Pi Tx with built in test frame:
+      ```
+      sudo ./fsk_rpitx /dev/zero --code H_256_512_4 -r 10000 -s 10000 --testframes 10 --bursts 10 --seq -g 21 -m 4
+      ```
+   1. Or Pi Tx using external source of frames:
+      ```
+      ../codec2/build_linux/src/ofdm_get_test_bits --length 256 --bcb --frames 2 | sudo ./fsk_rpitx - --code H_256_512_4 -r 10000 -s 10000 --seq -g 21 -m 4
+      ```
+      An extra "burst control byte" is pre-pended to each frame of 256 data bits, that tells the Tx to start and stop a
+      burst.  At the start of a burst the antenna switch GPIO is set to "Tx", and we start our FSK Tx carrier.  At the
+      end of a burst we shut down the FSK Tx carrier, and set the antenna switch GPIO to Rx.
+      
    Rx on laptop:
    ```
    ./src/rtl_fsk -g 30 -f 144490000 - -r 10000 -m 2 -a 180000 --code H_256_512_4 -v -u localhost --testframes -m 4 --mask 10000 > /dev/null

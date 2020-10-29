@@ -5,10 +5,12 @@
   FSK modulates an input bit stream using rpitx.
 
   TODO:
-  [ ] decide if we should have packet bytes input data
-  [ ] if so, need a way to send uncoded test packets as per examples in README.md
-  [ ] Something wrong at Rs<200, e.g. Rx can't detect any packets at Rs=100
-  [ ] test link with other codes
+  [ ] option for packed/unpacked byte input data
+      [ ] a way to send uncoded test packets as per examples in README.md
+      [ ] check uncoded examples
+  [ ] Fix operation at Rs<200, at present we can't detect any packets at Rs=100
+  [ ] test link with other LDPC codes
+      + high rate codes are of interest, big gains for small overhead
 */
 
 #include <assert.h>
@@ -123,7 +125,7 @@ int main(int argc, char **argv)
     char usage[] = "usage: %s [-m fskM 2|4] [-f carrierFreqHz] [-r symbRateHz] [-s shiftHz] [-t] [-c] "
                    "[--testframes Nframes] InputOneBitPerCharFile\n"
                    "  -c               Carrier test mode\n"
-                   "  -g               GPIO that controls antenna Tx/Rx switch\n"
+                   "  -g               GPIO that controls antenna Tx/Rx switch (1 for Tx, 0 for Rx)\n"
                    "  -t               ...0101010... FSK test mode\n"
                    "  --code CodeName  Use LDPC code CodeName\n"
                    "  --listcodes      List available LDPC codes\n"
@@ -326,23 +328,65 @@ int main(int argc, char **argv)
         else {
             /* regular FSK or FSK_LDPC Tx operation with bits/bytes from stdin */     
 
-            if (fsk_ldpc)
-                modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
-        
-            while(running) {
-                int BytesRead = fread(data_bits, sizeof(uint8_t), data_bits_per_frame, fin);
-                if (BytesRead == (data_bits_per_frame)) {
-                    if (fsk_ldpc) {
+            while(1) {
+                uint8_t burst_control;
+                int BytesRead;
+                
+                if (fsk_ldpc) {
+                    // in fsk_ldpc mode we prepend input data with a burst control byte
+                    BytesRead = fread(&burst_control, sizeof(uint8_t), 1, fin);
+                    if (BytesRead == 0) goto finished;
+                }
+                
+                BytesRead = fread(data_bits, sizeof(uint8_t), data_bits_per_frame, fin);
+
+                fprintf(stderr, "burst_control: %d BytesRead: %d\n", burst_control, BytesRead);
+                
+                if (BytesRead != data_bits_per_frame) goto finished;
+                                                           
+                if (fsk_ldpc) {
+
+                    // start of burst
+                    if (burst_control == 1) {
+                        fprintf(stderr, "bringing up tx\n");
+                        // antenna switch to Tx
+                        if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
+                        // transmitter carrier on
+                        fmmod->clkgpio::enableclk(4);
+                        // send preamble
+                        fprintf(stderr, "sending preamble\n");
+                        modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
+                    }
+
+                    if ((burst_control == 0) || (burst_control == 1)) {
+                        fprintf(stderr, "sending frames\n");
+                        // send a data frame, note last two bytes in frame replaced with CRC
                         calculate_and_insert_crc(data_bits, data_bits_per_frame);            
                         freedv_tx_fsk_ldpc_framer(freedv, tx_frame, data_bits);
+                        modulate_frame(fmmod, shiftHz, m, tx_frame, bits_per_frame);
                     }
-                    else {
-                        memcpy(tx_frame, data_bits, data_bits_per_frame);
+                    
+                    // end of burst - this has a dummy data frame so don't send
+                    if (burst_control == 2) {
+                        fprintf(stderr, "shutting down Tx\n");
+                        // wait for enough time for FIFO to empty
+                        int bufferSamples = FIFO_SIZE - fmmod->GetBufferAvailable();
+                        float tdelay = (float)bufferSamples/SymbolRate;
+                        usleep((int)(tdelay*1E6));
+                        // transmitter carrier off between bursts
+                        fmmod->clkgpio::disableclk(4);
+                        // antenna switch to Rx
+                        if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");
                     }
-                    modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
-                } else {
-                    running=false;
                 }
+                else {
+                    // uncoded mode - just send data_bits without any further framing
+                    memcpy(tx_frame, data_bits, data_bits_per_frame);
+                    modulate_frame(fmmod, shiftHz, m, tx_frame, bits_per_frame);
+                }
+
+                // allow us to bail on Ctrl-C
+                if (!running) goto finished;
             }
         }
     }
