@@ -1,5 +1,5 @@
 /*
-  fsk_rpitx.cpp
+  rpitx_fsk.cpp
   David Rowe July 2020
 
   FSK modulates an input bit stream using rpitx.

@@ -1,6 +1,6 @@
-# Makefile for fsk_rpitx, a fsk modulator for the Pi
+# Makefile for rpitx_fsk, a fsk modulator for the Pi
 
-all: fsk_rpitx
+all: rpitx_fsk
 
 CODEC2_DIR=../codec2/build_linux/src
 CXXFLAGS = -std=c++11 -Wall -g -O2 -Wno-unused-variable -I../codec2/src
@@ -8,6 +8,6 @@ LDFLAGS = ../librpitx/src/librpitx.a $(CODEC2_DIR)/libcodec2.so -Wl,-rpath=$(COD
 CCP = c++
 CC = cc
 
-fsk_rpitx : fsk_rpitx.cpp ../librpitx/src/librpitx.a
-	$(CCP) $(CXXFLAGS) -o fsk_rpitx fsk_rpitx.cpp  $(LDFLAGS)
+rpitx_fsk : rpitx_fsk.cpp ../librpitx/src/librpitx.a
+	$(CCP) $(CXXFLAGS) -o rpitx_fsk rpitx_fsk.cpp  $(LDFLAGS)
 

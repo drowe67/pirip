@@ -50,11 +50,11 @@ $ ./build_rtlsdr.sh
 
 1. Transmit two tone test signal for Pi:
    ```
-   pi@raspberrypi:~/pirip/tx $ sudo ./fsk_rpitx -t /dev/null
+   pi@raspberrypi:~/pirip/tx $ sudo ./rpitx_fsk -t /dev/null
    ```
 1. Transmit test frames from Pi for 60 seconds:
    ```
-   pi@raspberrypi:~/pirip/tx $ ../codec2/build_linux/src/fsk_get_test_bits - 600000 | sudo ./fsk_rpitx -
+   pi@raspberrypi:~/pirip/tx $ ../codec2/build_linux/src/fsk_get_test_bits - 600000 | sudo ./rpitx_fsk -
    ```
 1. Receive test frames on x86 laptop for 5 seconds (vanilla rtl_sdr):
    ```
@@ -132,7 +132,7 @@ $ ./build_rtlsdr.sh
 1. FSK with LDPC and framer at 1000 bit/s.  On the Pi Tx, we use an external source of test frames:
    ```
    $ cd ~/pirip/tx
-   $ ../codec2/build_linux/src/fsk_get_test_bits - 2560 256 | sudo ./fsk_rpitx - --code H_256_512_4 -r 1000 -s 1000
+   $ ../codec2/build_linux/src/fsk_get_test_bits - 2560 256 | sudo ./rpitx_fsk - --code H_256_512_4 -r 1000 -s 1000
    ```
    Laptop Rx:
    ```
@@ -144,7 +144,7 @@ $ ./build_rtlsdr.sh
    
 1. FSK with LDPC and framer at 10000 bit/s, internal test frames.  On the Pi Tx:
    ```
-   $ sudo ./fsk_rpitx /dev/zero --code H_256_512_4 -r 10000 -s 10000 --testframes 10
+   $ sudo ./rpitx_fsk /dev/zero --code H_256_512_4 -r 10000 -s 10000 --testframes 10
    ```
    Laptop Rx:
    ```
@@ -227,11 +227,11 @@ $ ./build_rtlsdr.sh
 
    1. Pi Tx with built in test frame:
       ```
-      sudo ./fsk_rpitx /dev/zero --code H_256_512_4 -r 10000 -s 10000 --testframes 10 --bursts 10 --seq -g 21 -m 4
+      sudo ./rpitx_fsk /dev/zero --code H_256_512_4 -r 10000 -s 10000 --testframes 10 --bursts 10 --seq -g 21 -m 4
       ```
    1. Or Pi Tx using external source of frames:
       ```
-      ../codec2/build_linux/src/ofdm_get_test_bits --length 256 --bcb --frames 2 | sudo ./fsk_rpitx - --code H_256_512_4 -r 10000 -s 10000 --seq -g 21 -m 4
+      ../codec2/build_linux/src/ofdm_get_test_bits --length 256 --bcb --frames 2 | sudo ./rpitx_fsk - --code H_256_512_4 -r 10000 -s 10000 --seq -g 21 -m 4
       ```
       An extra "burst control byte" is pre-pended to each frame of 256 data bits, that tells the Tx to start and stop a
       burst.  At the start of a burst the antenna switch GPIO is set to "Tx", and we start our FSK Tx carrier.  At the
@@ -247,6 +247,7 @@ $ ./build_rtlsdr.sh
 
 1. [Open IP over VHF/UHF 1](http://www.rowetel.com/?p=7207) - Blog post introducing this project
 1. [Open IP over VHF/UHF 2](http://www.rowetel.com/?p=7334) - Second blog post on uncoded OTA tests
+1. [FSK_LDPC Data Mode](http://www.rowetel.com/?p=7467) - Physical layer design and testing
 1. [Codec 2 FSK Raw Data Modes](https://github.com/drowe67/codec2/blob/master/README_data.md)
 1. [Codec 2 FSK Modem](https://github.com/drowe67/codec2/blob/master/README_fsk.md)
 1. [Previous Codec 2 PR discussing this project](https://github.com/drowe67/codec2/pull/125)
