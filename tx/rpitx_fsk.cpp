@@ -348,7 +348,7 @@ int main(int argc, char **argv)
 
                     // start of burst
                     if (burst_control == 1) {
-                        fprintf(stderr, "bringing up tx\n");
+                        fprintf(stderr, "Tx on\n");
                         // antenna switch to Tx
                         if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
                         // transmitter carrier on
@@ -368,7 +368,6 @@ int main(int argc, char **argv)
                     
                     // end of burst - this has a dummy data frame so don't send
                     if (burst_control == 2) {
-                        fprintf(stderr, "shutting down Tx\n");
                         // wait for enough time for FIFO to empty
                         int bufferSamples = FIFO_SIZE - fmmod->GetBufferAvailable();
                         float tdelay = (float)bufferSamples/SymbolRate;
@@ -377,6 +376,7 @@ int main(int argc, char **argv)
                         fmmod->clkgpio::disableclk(4);
                         // antenna switch to Rx
                         if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");
+                        fprintf(stderr, "Tx off\n");
                     }
                 }
                 else {
