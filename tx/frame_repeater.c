@@ -44,31 +44,31 @@ int main(int argc, char *argv[]) {
     }
 
     int data_bits_per_frame = atoi(argv[1]);
-    fprintf(stderr, "%d\n", data_bits_per_frame);
     assert((data_bits_per_frame % 8) == 0);
     int data_bytes_per_frame = data_bits_per_frame/8;
+    fprintf(stderr, "frame_repeater: %d %d\n", data_bits_per_frame, data_bytes_per_frame);
     uint8_t data[data_bytes_per_frame];
     uint8_t data_buffer[data_bytes_per_frame*MAX_FRAMES];
-    fprintf(stderr, "opening FIFO\n");
-    int rpitx_fsk_fifo = open(argv[2], O_RDONLY, O_NONBLOCK);
+    fprintf(stderr, "frame_repeater: opening FIFO\n");
+    int rpitx_fsk_fifo = open(argv[2], O_RDONLY | O_NONBLOCK);
     if (rpitx_fsk_fifo == -1) {
-        fprintf(stderr, "Error opening %s\n", argv[2]);
+        fprintf(stderr, "Error opening fifo %s\n", argv[2]);
         exit(1);
     }
+    fprintf(stderr, "frame_repeater: FIFO opened OK ...\n");
     
     /* At regular intervals rtl_fsk sends a status byte then
        data_bytes_per_frame.  If there is no received data then
        data_buffer will be all zeros. */
 
-    uint8_t rx_status;
-    fprintf(stderr, "reading status ...\n");
+    uint8_t rx_status, prev_rx_status = 0;
     while(fread(&rx_status, sizeof(uint8_t), 1, stdin)) {
-        fprintf(stderr, "reading data ...\n");
         ret = fread(data, sizeof(uint8_t), data_bytes_per_frame, stdin);
         assert(ret == data_bytes_per_frame);
         tx_off_event = 0;
         
         // messages from rpitx_fsk in fifo create events
+        //fprintf(stderr, "about to poll FIFO\n");
         char buf[256];
         ret = read(rpitx_fsk_fifo, buf, sizeof(buf));
         if (ret > 0) {
@@ -76,12 +76,13 @@ int main(int argc, char *argv[]) {
             if (strcmp(buf,"Tx off\n") == 0) tx_off_event = 0;
         }
         
-        fprintf(stderr, "state: %d rx_status: %d tx_off_event: %d\n", state, rx_status, tx_off_event);
+        if (prev_rx_status != rx_status)
+            fprintf(stderr, "frame_repeater: state: %d rx_status: 0x%02x tx_off_event: %d\n", state, rx_status, tx_off_event);
         
         next_state = state;
         switch(state) {
         case IDLE:
-            if (rx_status & FREEDV_RX_BITS) {
+            if (rx_status == (FREEDV_RX_SYNC | FREEDV_RX_BITS)) {
                 fprintf(stderr, "  Starting to receive a burst\n");
                 memcpy(data_buffer, data, data_bytes_per_frame);
                 bytes_in = data_bytes_per_frame;
@@ -97,7 +98,7 @@ int main(int argc, char *argv[]) {
                 assert(bytes_in <= data_bytes_per_frame*MAX_FRAMES);
             }
             if (!(rx_status & FREEDV_RX_SYNC)) {
-                fprintf(stderr, "  Sending received burst\n");
+                fprintf(stderr, "  Sending received burst of %d bytes\n", bytes_in);
                 /* We've lost RX_SYNC so receive burst finished.  So
                    lets Tx data we received.  fwrite's shouldn't block
                    due to size of stdout buffer */
@@ -111,6 +112,7 @@ int main(int argc, char *argv[]) {
                 burst_control = 2; memset(data, 0, data_bytes_per_frame);
                 fwrite(&burst_control, sizeof(uint8_t), data_bytes_per_frame, stdout);
                 fwrite(data, sizeof(uint8_t), data_bytes_per_frame, stdout);
+                fflush(stdout);
                 next_state = WAIT_FOR_TX_OFF;
             }
             break;
@@ -130,6 +132,7 @@ int main(int argc, char *argv[]) {
             assert(0);
         }
         state = next_state;
+        prev_rx_status = rx_status;
     }
 
     return 0;

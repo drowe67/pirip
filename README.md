@@ -242,7 +242,12 @@ $ ./build_rtlsdr.sh
    ./src/rtl_fsk -g 30 -f 144490000 - -r 10000 -m 2 -a 180000 --code H_256_512_4 -v -u localhost --testframes -m 4 --mask 10000 > /dev/null
    ```
    
-
+1. Frame Repeater:
+   ```
+   $ cd pirip/lirtlsdr/build_linux
+   $ ./src/rtl_fsk -g 49 -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 -q -v | ~/pirip/tx/frame_repeater 256 ~/pirip/fifo | sudo ~/pirip/tx/rpitx_fsk - --code H_256_512_4 -r 10000 -s 10000 -g 21 --fifo ~/pirip/fifo 
+   ```
+   
 # Reading Further
 
 1. [Open IP over VHF/UHF 1](http://www.rowetel.com/?p=7207) - Blog post introducing this project
