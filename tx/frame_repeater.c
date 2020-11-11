@@ -72,8 +72,8 @@ int main(int argc, char *argv[]) {
         char buf[256];
         ret = read(rpitx_fsk_fifo, buf, sizeof(buf));
         if (ret > 0) {
-            fprintf(stderr, "Read %d bytes from rpitx_fsk\n", ret);
-            if (strcmp(buf,"Tx off\n") == 0) tx_off_event = 0;
+            fprintf(stderr, "frame_repeater: Read %d bytes from rpitx_fsk: %s\n", ret, buf);
+            if (strcmp(buf,"Tx off") == 0) tx_off_event = 1;
         }
         
         if (prev_rx_status != rx_status)
@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
         switch(state) {
         case IDLE:
             if (rx_status == (FREEDV_RX_SYNC | FREEDV_RX_BITS)) {
-                fprintf(stderr, "  Starting to receive a burst\n");
+                fprintf(stderr, "frame_repeater: Starting to receive a burst\n");
                 memcpy(data_buffer, data, data_bytes_per_frame);
                 bytes_in = data_bytes_per_frame;
                 next_state = RECEIVING_BURST;
@@ -91,26 +91,26 @@ int main(int argc, char *argv[]) {
         break;
         case RECEIVING_BURST:
             if (rx_status & FREEDV_RX_BITS) {
-                fprintf(stderr, "  Receiving a frame in a burst\n");
+                fprintf(stderr, "frame_repeater: Receiving a frame in a burst\n");
                 // buffer latest packet
                 memcpy(data_buffer, data, data_bytes_per_frame);
                 bytes_in += data_bytes_per_frame;
                 assert(bytes_in <= data_bytes_per_frame*MAX_FRAMES);
             }
             if (!(rx_status & FREEDV_RX_SYNC)) {
-                fprintf(stderr, "  Sending received burst of %d bytes\n", bytes_in);
+                fprintf(stderr, "frame_repeater: Sending received burst of %d bytes\n", bytes_in);
                 /* We've lost RX_SYNC so receive burst finished.  So
                    lets Tx data we received.  fwrite's shouldn't block
                    due to size of stdout buffer */
                 bytes_out = 0; burst_control = 1;
                 while(bytes_out != bytes_in) {
-                    fwrite(&burst_control, sizeof(uint8_t), data_bytes_per_frame, stdout);
+                    fwrite(&burst_control, sizeof(uint8_t), 1, stdout);
                     fwrite(&data_buffer[bytes_out], sizeof(uint8_t), data_bytes_per_frame, stdout);
                     bytes_out += data_bytes_per_frame;
                     burst_control = 0;
                 }
                 burst_control = 2; memset(data, 0, data_bytes_per_frame);
-                fwrite(&burst_control, sizeof(uint8_t), data_bytes_per_frame, stdout);
+                fwrite(&burst_control, sizeof(uint8_t), 1, stdout);
                 fwrite(data, sizeof(uint8_t), data_bytes_per_frame, stdout);
                 fflush(stdout);
                 next_state = WAIT_FOR_TX_OFF;

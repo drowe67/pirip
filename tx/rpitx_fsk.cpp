@@ -123,6 +123,7 @@ int main(int argc, char **argv)
     char ant_switch_gpio[128] = "";
     char ant_switch_gpio_path[MAX_CHAR] = "";
     int rpitx_fsk_fifo = 0;
+    int packed = 0;
     
     char usage[] = "usage: %s [-m fskM 2|4] [-f carrierFreqHz] [-r symbRateHz] [-s shiftHz] [-t] [-c] "
                    "[--testframes Nframes] InputOneBitPerCharFile\n"
@@ -135,6 +136,7 @@ int main(int argc, char **argv)
                    "  --bursts     B   Send B bursts of N testframes (default 1)\n"
                    "  --seq            send packet sequence numbers (breaks testframe BER counting)\n"
                    "  --fifo fifoName  send stats messages to fifoName\n"     
+                   "  --packed         packed byte input\n"     
                    "\n"
                    " Example 1, send 10000 bits of (100 bit) tests frames from external test frame generator\n"
                    " at 1000 bits/s using 2FSK:\n\n"
@@ -152,7 +154,8 @@ int main(int argc, char **argv)
             {"bursts",    required_argument, 0, 'e'},
             {"seq",       no_argument,       0, 'q'},
             {"fifo",      required_argument, 0, 'i'},
-           {0, 0, 0, 0}
+            {"packed",    no_argument,       0, 'l'},
+            {0, 0, 0, 0}
         };
         
         opt = getopt_long(argc,argv,"a:bce:f:g:i:m:qr:s:tu:",long_opts,&opt_idx);
@@ -174,6 +177,9 @@ int main(int argc, char **argv)
             break;
         case 'm':
             m = atoi(optarg);
+            break;
+        case 'l':
+            packed = 1;
             break;
         case 'f':
             frequency = atof(optarg);
@@ -343,20 +349,29 @@ int main(int argc, char **argv)
 
             while(1) {
                 uint8_t burst_control;
-                int BytesRead;
+                int nRead;
                 
                 if (fsk_ldpc) {
                     // in fsk_ldpc mode we prepend input data with a burst control byte
-                    BytesRead = fread(&burst_control, sizeof(uint8_t), 1, fin);
-                    if (BytesRead == 0) goto finished;
+                    nRead = fread(&burst_control, sizeof(uint8_t), 1, fin);
+                    if (nRead == 0) goto finished;
                 }
                 
-                BytesRead = fread(data_bits, sizeof(uint8_t), data_bits_per_frame, fin);
-
-                fprintf(stderr, "rpitx_fsk: burst_control: %d BytesRead: %d\n", burst_control, BytesRead);
+                if (packed) {
+                    int data_bytes_per_frame = data_bits_per_frame/8;
+                    uint8_t data_bytes[data_bytes_per_frame];
+                    nRead = fread(data_bytes, sizeof(uint8_t), data_bytes_per_frame, fin);
+                    freedv_unpack(data_bits, data_bytes, data_bits_per_frame);
+                    nRead *= 8;
+                }
+                else {
+                    nRead = fread(data_bits, sizeof(uint8_t), data_bits_per_frame, fin);
+                }
                 
-                if (BytesRead != data_bits_per_frame) goto finished;
-                                                           
+                fprintf(stderr, "rpitx_fsk: burst_control: %d nRead: %d\n", burst_control, nRead);
+
+                if (nRead != data_bits_per_frame) goto finished;
+
                 if (fsk_ldpc) {
 
                     // start of burst
@@ -391,8 +406,8 @@ int main(int argc, char **argv)
                         if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");
                         fprintf(stderr, "rpitx_fsk: Tx off\n");
                         char buf[256];
-                        sprintf(buf, "Tx off\n");
-                        if (write(rpitx_fsk_fifo, buf, strlen(buf)) ==-1) {
+                        sprintf(buf, "Tx off");
+                        if (write(rpitx_fsk_fifo, buf, strlen(buf)+1) ==-1) {
                             fprintf(stderr, "rpitx_fsk: error writing to FIFO\n");
                         }
                     }
