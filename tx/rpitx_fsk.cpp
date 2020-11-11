@@ -346,7 +346,7 @@ int main(int argc, char **argv)
         }
         else {
             /* regular FSK or FSK_LDPC Tx operation with bits/bytes from stdin */     
-
+            int nframes = 0;
             while(1) {
                 uint8_t burst_control;
                 int nRead;
@@ -384,10 +384,11 @@ int main(int argc, char **argv)
                         // send preamble
                         fprintf(stderr, "rpitx_fsk: sending preamble\n");
                         modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
+                        nframes = 0;
                     }
 
                     if ((burst_control == 0) || (burst_control == 1)) {
-                        fprintf(stderr, "rpitx_fsk: sending frames\n");
+                        fprintf(stderr, "rpitx_fsk: sending frame: %d\n", nframes); nframes++;
                         // send a data frame, note last two bytes in frame replaced with CRC
                         calculate_and_insert_crc(data_bits, data_bits_per_frame);            
                         freedv_tx_fsk_ldpc_framer(freedv, tx_frame, data_bits);
@@ -405,10 +406,12 @@ int main(int argc, char **argv)
                         // antenna switch to Rx
                         if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");
                         fprintf(stderr, "rpitx_fsk: Tx off\n");
-                        char buf[256];
-                        sprintf(buf, "Tx off");
-                        if (write(rpitx_fsk_fifo, buf, strlen(buf)+1) ==-1) {
-                            fprintf(stderr, "rpitx_fsk: error writing to FIFO\n");
+                        if (rpitx_fsk_fifo) {
+                            char buf[256];
+                            sprintf(buf, "Tx off");
+                            if (write(rpitx_fsk_fifo, buf, strlen(buf)+1) ==-1) {
+                                fprintf(stderr, "rpitx_fsk: error writing to FIFO\n");
+                            }
                         }
                     }
                 }
