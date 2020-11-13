@@ -259,7 +259,7 @@ $ ./build_rtlsdr.sh
    This uses a source addressing scheme to filter out locally transmitted frames. In the example above, the laptop has
    address 0x1, and the Pi addess 0x2.  We tell the rtl_fsk Rx 0x1 to ignore any packets sent from 0x1.  This neatly prevents the frame repeater from hearing it's own packets and going into a loop.
 
-   ![Frame Repeater Bench Test](doc/repeater_otc.png)
+   ![Frame Repeater Bench Test](doc/repeater_otb.png)
 
 # Reading Further
 
