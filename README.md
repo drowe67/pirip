@@ -242,7 +242,17 @@ $ ./build_rtlsdr.sh
    ./src/rtl_fsk -g 30 -f 144490000 - -r 10000 -m 2 -a 180000 --code H_256_512_4 -v -u localhost --testframes -m 4 --mask 10000 > /dev/null
    ```
    
-
+1. Frame Repeater, 10000 bits, 2FSK.  Start up repeater on Pi
+   ```
+   $ cd pirip/lirtlsdr/build_linux
+   $ /src/rtl_fsk -g 49 -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 -q | ~/pirip/tx/frame_repeater 256 10000 2 | sudo ~/pirip/tx/rpitx_fsk - --code H_256_512_4 -r 10000 -s 10000 -g 21 --packed
+   ```
+   Then send test frames from HackRF on laptop:
+   ```
+   $ ./src/freedv_data_raw_tx -c --testframes 1 --burst 1 --Fs 100000 --Rs 10000 --tone1 10000 --shift 10000 -a 30000 FSK_LDPC /dev/zero - | ./misc/tlininterp - hackrf_rs10000m2.iq8 40 -d -f
+   $ hackrf_transfer -t hackrf_rs10000m2.iq8 -s 4E6 -f 143.5E6
+   ```
+   
 # Reading Further
 
 1. [Open IP over VHF/UHF 1](http://www.rowetel.com/?p=7207) - Blog post introducing this project

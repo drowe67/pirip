@@ -22,6 +22,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "../librpitx/src/librpitx.h"
 #include "ldpc_codes.h"
@@ -121,7 +122,9 @@ int main(int argc, char **argv)
     int sequence_numbers = 0;
     char ant_switch_gpio[128] = "";
     char ant_switch_gpio_path[MAX_CHAR] = "";
-
+    int rpitx_fsk_fifo = 0;
+    int packed = 0;
+    
     char usage[] = "usage: %s [-m fskM 2|4] [-f carrierFreqHz] [-r symbRateHz] [-s shiftHz] [-t] [-c] "
                    "[--testframes Nframes] InputOneBitPerCharFile\n"
                    "  -c               Carrier test mode\n"
@@ -132,6 +135,8 @@ int main(int argc, char **argv)
                    "  --testframes N   Send N testframes per burst\n"
                    "  --bursts     B   Send B bursts of N testframes (default 1)\n"
                    "  --seq            send packet sequence numbers (breaks testframe BER counting)\n"
+                   "  --fifo fifoName  send stats messages to fifoName\n"     
+                   "  --packed         packed byte input\n"     
                    "\n"
                    " Example 1, send 10000 bits of (100 bit) tests frames from external test frame generator\n"
                    " at 1000 bits/s using 2FSK:\n\n"
@@ -148,10 +153,12 @@ int main(int argc, char **argv)
             {"testframes",required_argument, 0, 'u'},
             {"bursts",    required_argument, 0, 'e'},
             {"seq",       no_argument,       0, 'q'},
-           {0, 0, 0, 0}
+            {"fifo",      required_argument, 0, 'i'},
+            {"packed",    no_argument,       0, 'l'},
+            {0, 0, 0, 0}
         };
         
-        opt = getopt_long(argc,argv,"a:bce:f:g:m:qr:s:tu:",long_opts,&opt_idx);
+        opt = getopt_long(argc,argv,"a:bce:f:g:i:m:qr:s:tu:",long_opts,&opt_idx);
 
         switch (opt) {
         case 'a':
@@ -171,8 +178,19 @@ int main(int argc, char **argv)
         case 'm':
             m = atoi(optarg);
             break;
+        case 'l':
+            packed = 1;
+            break;
         case 'f':
             frequency = atof(optarg);
+            break;
+        case 'i':
+            rpitx_fsk_fifo = open(optarg, O_WRONLY);
+            if (rpitx_fsk_fifo == -1) {
+                fprintf(stderr, "Error opening fifo %s\n", argv[2]);
+                exit(1);
+            }
+            fprintf(stderr, "rpitx_fsk: FIFO opened OK ...\n");
             break;
         case 'q':
             sequence_numbers = 1;
@@ -264,6 +282,7 @@ int main(int argc, char **argv)
     if (shiftHz == -1)
         shiftHz = 2*SymbolRate;
     fmmod = new ngfmdmasync(frequency,SymbolRate,14,FIFO_SIZE); 	
+    fmmod->clkgpio::disableclk(4);
     
     fprintf(stderr, "Frequency: %4.1f MHz Rs: %4.1f kHz Shift: %4.1f kHz M: %d \n", frequency/1E6, SymbolRate/1E3, shiftHz/1E3, m);
     fprintf(stderr, "data_bits_per_frame: %d bits_per_frame: %d\n", data_bits_per_frame, bits_per_frame);
@@ -327,39 +346,49 @@ int main(int argc, char **argv)
         }
         else {
             /* regular FSK or FSK_LDPC Tx operation with bits/bytes from stdin */     
-
+            int nframes = 0;
             while(1) {
                 uint8_t burst_control;
-                int BytesRead;
+                int nRead;
                 
                 if (fsk_ldpc) {
                     // in fsk_ldpc mode we prepend input data with a burst control byte
-                    BytesRead = fread(&burst_control, sizeof(uint8_t), 1, fin);
-                    if (BytesRead == 0) goto finished;
+                    nRead = fread(&burst_control, sizeof(uint8_t), 1, fin);
+                    if (nRead == 0) goto finished;
                 }
                 
-                BytesRead = fread(data_bits, sizeof(uint8_t), data_bits_per_frame, fin);
-
-                fprintf(stderr, "burst_control: %d BytesRead: %d\n", burst_control, BytesRead);
+                if (packed) {
+                    int data_bytes_per_frame = data_bits_per_frame/8;
+                    uint8_t data_bytes[data_bytes_per_frame];
+                    nRead = fread(data_bytes, sizeof(uint8_t), data_bytes_per_frame, fin);
+                    freedv_unpack(data_bits, data_bytes, data_bits_per_frame);
+                    nRead *= 8;
+                }
+                else {
+                    nRead = fread(data_bits, sizeof(uint8_t), data_bits_per_frame, fin);
+                }
                 
-                if (BytesRead != data_bits_per_frame) goto finished;
-                                                           
+                fprintf(stderr, "rpitx_fsk: burst_control: %d nRead: %d\n", burst_control, nRead);
+
+                if (nRead != data_bits_per_frame) goto finished;
+
                 if (fsk_ldpc) {
 
                     // start of burst
                     if (burst_control == 1) {
-                        fprintf(stderr, "Tx on\n");
+                        fprintf(stderr, "rpitx_fsk: Tx on\n");
                         // antenna switch to Tx
                         if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
                         // transmitter carrier on
                         fmmod->clkgpio::enableclk(4);
                         // send preamble
-                        fprintf(stderr, "sending preamble\n");
+                        fprintf(stderr, "rpitx_fsk: sending preamble\n");
                         modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
+                        nframes = 0;
                     }
 
                     if ((burst_control == 0) || (burst_control == 1)) {
-                        fprintf(stderr, "sending frames\n");
+                        fprintf(stderr, "rpitx_fsk: sending frame: %d\n", nframes); nframes++;
                         // send a data frame, note last two bytes in frame replaced with CRC
                         calculate_and_insert_crc(data_bits, data_bits_per_frame);            
                         freedv_tx_fsk_ldpc_framer(freedv, tx_frame, data_bits);
@@ -376,7 +405,14 @@ int main(int argc, char **argv)
                         fmmod->clkgpio::disableclk(4);
                         // antenna switch to Rx
                         if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");
-                        fprintf(stderr, "Tx off\n");
+                        fprintf(stderr, "rpitx_fsk: Tx off\n");
+                        if (rpitx_fsk_fifo) {
+                            char buf[256];
+                            sprintf(buf, "Tx off");
+                            if (write(rpitx_fsk_fifo, buf, strlen(buf)+1) ==-1) {
+                                fprintf(stderr, "rpitx_fsk: error writing to FIFO\n");
+                            }
+                        }
                     }
                 }
                 else {
