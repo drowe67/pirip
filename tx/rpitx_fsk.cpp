@@ -5,11 +5,9 @@
   FSK modulates an input bit stream using rpitx.
 
   TODO:
-  [ ] option for packed/unpacked byte input data
-      [ ] a way to send uncoded test packets as per examples in README.md
-      [ ] check uncoded examples
+  [X] option for packed/unpacked byte input data
   [ ] Fix operation at Rs<200, at present we can't detect any packets at Rs=100
-  [ ] test link with other LDPC codes
+  [ ] test with other LDPC codes
       + high rate codes are of interest, big gains for small overhead
 */
 
@@ -124,6 +122,7 @@ int main(int argc, char **argv)
     char ant_switch_gpio_path[MAX_CHAR] = "";
     int rpitx_fsk_fifo = 0;
     int packed = 0;
+    uint8_t source_byte = 0;
     
     char usage[] = "usage: %s [-m fskM 2|4] [-f carrierFreqHz] [-r symbRateHz] [-s shiftHz] [-t] [-c] "
                    "[--testframes Nframes] InputOneBitPerCharFile\n"
@@ -134,9 +133,10 @@ int main(int argc, char **argv)
                    "  --listcodes      List available LDPC codes\n"
                    "  --testframes N   Send N testframes per burst\n"
                    "  --bursts     B   Send B bursts of N testframes (default 1)\n"
-                   "  --seq            send packet sequence numbers (breaks testframe BER counting)\n"
+                   "  --seq            send packet sequence numbers (breaks testframe BER counting) in byte[1]\n"
                    "  --fifo fifoName  send stats messages to fifoName\n"     
                    "  --packed         packed byte input\n"     
+                   "  --source Byte    insert a (non-zero) source address att byte[0]\n"
                    "\n"
                    " Example 1, send 10000 bits of (100 bit) tests frames from external test frame generator\n"
                    " at 1000 bits/s using 2FSK:\n\n"
@@ -155,10 +155,11 @@ int main(int argc, char **argv)
             {"seq",       no_argument,       0, 'q'},
             {"fifo",      required_argument, 0, 'i'},
             {"packed",    no_argument,       0, 'l'},
+            {"source",    required_argument, 0, 'd'},
             {0, 0, 0, 0}
         };
         
-        opt = getopt_long(argc,argv,"a:bce:f:g:i:m:qr:s:tu:",long_opts,&opt_idx);
+        opt = getopt_long(argc,argv,"a:bcd:e:f:g:i:m:qr:s:tu:",long_opts,&opt_idx);
 
         switch (opt) {
         case 'a':
@@ -171,6 +172,10 @@ int main(int argc, char **argv)
             break;
         case 'c':
             carrier_test = 1;
+            break;
+        case 'd':
+            source_byte = strtol(optarg, NULL, 0);
+            fprintf(stderr,"source byte: 0x%02x\n", source_byte);
             break;
         case 'e':
             Nbursts = atoi(optarg);
@@ -311,13 +316,19 @@ int main(int argc, char **argv)
                 modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
         
                 for (int f=0; f<Nframes; f++) {
+                    // optional injection of source address byte
+                    if (source_byte) {
+                         for (int i=0; i<8; i++) 
+                            data_bits[i] = (source_byte >> (7-i)) & 0x1;
+                    }
+                    
                     // optional injection of sequence numbers to help locate bad frames
                     if (sequence_numbers) {
                         int seq = (f+1) & 0xff;
                         for (int i=0; i<8; i++) 
-                            data_bits[i] = (seq >> (7-i)) & 0x1;
+                            data_bits[8+i] = (seq >> (7-i)) & 0x1;
                     }
-
+                    
                     calculate_and_insert_crc(data_bits, data_bits_per_frame);
                     freedv_tx_fsk_ldpc_framer(freedv, tx_frame, data_bits);
                     modulate_frame(fmmod, shiftHz, m, tx_frame, bits_per_frame);
