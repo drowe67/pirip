@@ -16,7 +16,7 @@ Currently working on M4 -Over The Air (OTA) tests.
 | M4 | ~~first OTA tests using uncoded modem~~ | repeat after recent tuning - demo an OTA link with margin |
 | M5 | ~~Pi running Tx and Rx~~ | Half duplex, loopback demo would be neat |
 | M6 | ~~Add LDPC FEC to waveform~~ | Needs to be tested/tuned OTA |
-| M7 | Bidirectional half duplex Tx/Rx on single Pi | For example two Pis ping-ponging frames at each other | 
+| M7 | ~~Bidirectional half duplex Tx/Rx on single Pi~~ | frame repeater (ping) application developed and tested on the bench | 
 | M8 | TAP/TUN integration and demo IP link | What protocol? |
 | M9 | Document how to build simple wire antennas | |
 
@@ -50,11 +50,11 @@ $ ./build_rtlsdr.sh
 
 1. Transmit two tone test signal for Pi:
    ```
-   pi@raspberrypi:~/pirip/tx $ sudo ./fsk_rpitx -t /dev/null
+   pi@raspberrypi:~/pirip/tx $ sudo ./rpitx_fsk -t /dev/null
    ```
 1. Transmit test frames from Pi for 60 seconds:
    ```
-   pi@raspberrypi:~/pirip/tx $ ../codec2/build_linux/src/fsk_get_test_bits - 600000 | sudo ./fsk_rpitx -
+   pi@raspberrypi:~/pirip/tx $ ../codec2/build_linux/src/fsk_get_test_bits - 600000 | sudo ./rpitx_fsk -
    ```
 1. Receive test frames on x86 laptop for 5 seconds (vanilla rtl_sdr):
    ```
@@ -132,7 +132,7 @@ $ ./build_rtlsdr.sh
 1. FSK with LDPC and framer at 1000 bit/s.  On the Pi Tx, we use an external source of test frames:
    ```
    $ cd ~/pirip/tx
-   $ ../codec2/build_linux/src/fsk_get_test_bits - 2560 256 | sudo ./fsk_rpitx - --code H_256_512_4 -r 1000 -s 1000
+   $ ../codec2/build_linux/src/fsk_get_test_bits - 2560 256 | sudo ./rpitx_fsk - --code H_256_512_4 -r 1000 -s 1000
    ```
    Laptop Rx:
    ```
@@ -144,7 +144,7 @@ $ ./build_rtlsdr.sh
    
 1. FSK with LDPC and framer at 10000 bit/s, internal test frames.  On the Pi Tx:
    ```
-   $ sudo ./fsk_rpitx /dev/zero --code H_256_512_4 -r 10000 -s 10000 --testframes 10
+   $ sudo ./rpitx_fsk /dev/zero --code H_256_512_4 -r 10000 -s 10000 --testframes 10
    ```
    Laptop Rx:
    ```
@@ -223,10 +223,49 @@ $ ./build_rtlsdr.sh
       the moment.
    1. Still, it's very nice to see 10 kbit/s moving through the system.  A nice milestone.
 
+1. Burst control - using a GPIO to control an antenna Tx/Rx pin diode switch on GPIO 21 (4FSK at 10k symbs/s):
+
+   1. Pi Tx with built in test frame:
+      ```
+      sudo ./rpitx_fsk /dev/zero --code H_256_512_4 -r 10000 -s 10000 --testframes 10 --bursts 10 --seq -g 21 -m 4
+      ```
+   1. Or Pi Tx using external source of frames:
+      ```
+      ../codec2/build_linux/src/ofdm_get_test_bits --length 256 --bcb --frames 2 | sudo ./rpitx_fsk - --code H_256_512_4 -r 10000 -s 10000 --seq -g 21 -m 4
+      ```
+      An extra "burst control byte" is pre-pended to each frame of 256 data bits, that tells the Tx to start and stop a
+      burst.  At the start of a burst the antenna switch GPIO is set to "Tx", and we start our FSK Tx carrier.  At the
+      end of a burst we shut down the FSK Tx carrier, and set the antenna switch GPIO to Rx.
+      
+   Rx on laptop:
+   ```
+   ./src/rtl_fsk -g 30 -f 144490000 - -r 10000 -m 2 -a 180000 --code H_256_512_4 -v -u localhost --testframes -m 4 --mask 10000 > /dev/null
+   ```
+   
+1. Frame Repeater, 10000 bits, 2FSK.  Start up repeater on Pi.
+   ```
+   $ cd pirip/lirtlsdr/build_linux
+   $ ./src/rtl_fsk -g 49 -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 --filter 0x2 -q | ~/pirip/tx/frame_repeater 256 0x2 | sudo ~/pirip/tx/rpitx_fsk - --code H_256_512_4 -r 10000 -s 10000 -g 21 --packed
+   ```
+   Start up receiver on another machine (e.g. laptop):
+   ```
+   $ cd ~/pirip/librtlsdr/build_rtlsdr
+   $ ./src/rtl_fsk -g 49 -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 --filter 0x1 | hexdump
+   ```
+   Then send test frames from HackRF on laptop, e.g. bursts of 3 frames:
+   ```
+   $ ./src/freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs 10000 --tone1 10000 --shift 10000 -a 30000 FSK_LDPC /dev/zero - | ./misc/tlininterp - - 40 -d -f | hackrf_transfer -t - -s 4E6 -f 143.5E6
+   ```
+   This uses a source addressing scheme to filter out locally transmitted frames. In the example above, the laptop has
+   address 0x1, and the Pi addess 0x2.  We tell the rtl_fsk Rx 0x1 to ignore any packets sent from 0x1.  This neatly prevents the frame repeater from hearing it's own packets and going into a loop.
+
+   ![Frame Repeater Bench Test](doc/repeater_otc.jpg)
+
 # Reading Further
 
 1. [Open IP over VHF/UHF 1](http://www.rowetel.com/?p=7207) - Blog post introducing this project
 1. [Open IP over VHF/UHF 2](http://www.rowetel.com/?p=7334) - Second blog post on uncoded OTA tests
+1. [FSK_LDPC Data Mode](http://www.rowetel.com/?p=7467) - Physical layer design and testing
 1. [Codec 2 FSK Raw Data Modes](https://github.com/drowe67/codec2/blob/master/README_data.md)
 1. [Codec 2 FSK Modem](https://github.com/drowe67/codec2/blob/master/README_fsk.md)
 1. [Previous Codec 2 PR discussing this project](https://github.com/drowe67/codec2/pull/125)
