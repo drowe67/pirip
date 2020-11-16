@@ -72,7 +72,7 @@ $ ./build_rtlsdr.sh
    Note this is tuned about 10kHz low, to put the two tones above the rtl_sdr DC line.  
 1. Demod GUI Dashboard. Open a new console and start `dash.py`:
    ```
-   ~/pirip$ netcat -luk 8001 | ./src/dash.py
+   ~/pirip$ netcat -luk 8001 | ./script/dash.py
    ```
    In another console start the FSK demod:
    ```
