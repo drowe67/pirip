@@ -254,7 +254,7 @@ $ ./build_rtlsdr.sh
    $ ./src/rtl_fsk -g 49 -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 --filter 0x1 | hexdump
    ```
    Then send test frames from HackRF on laptop, e.g. bursts of 3 frames:
-   ```
+    ```
    $ ./src/freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs 10000 --tone1 10000 --shift 10000 -a 30000 FSK_LDPC /dev/zero - | ./misc/tlininterp - - 40 -d -f | hackrf_transfer -t - -s 4E6 -f 143.5E6
    ```
    This uses a source addressing scheme to filter out locally transmitted frames. In the example above, the laptop has
@@ -264,8 +264,7 @@ $ ./build_rtlsdr.sh
 
 # Reading Further
 
-1. [Open IP over VHF/UHF 1](http://www.rowetel.com/?p=7207) - Blog post introducing this project
-1. [Open IP over VHF/UHF 2](http://www.rowetel.com/?p=7334) - Second blog post on uncoded OTA tests
+1. Open IP over VHF/UHF [Part 1](http://www.rowetel.com/?p=7207) [Part 2](http://www.rowetel.com/?p=7334) [Part 3](http://www.rowetel.com/?p=7567)
 1. [FSK_LDPC Data Mode](http://www.rowetel.com/?p=7467) - Physical layer design and testing
 1. [Codec 2 FSK Raw Data Modes](https://github.com/drowe67/codec2/blob/master/README_data.md)
 1. [Codec 2 FSK Modem](https://github.com/drowe67/codec2/blob/master/README_fsk.md)

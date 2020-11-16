@@ -1,0 +1,52 @@
+#!/bin/bash -x
+# pirip service script
+
+# TODO
+#   [X] way to send stderr to log file
+#   [ ] way to set freq at start up
+#   [ ] way to set Rs and M at start up
+#   [ ] way to start as frame repeater or beacon
+
+TERM_ADDR=0x2
+RS=10000
+DATA_BITS_PER_FRAME=256
+CODE=H_${DATA_BITS_PER_FRAME}_512_4
+TR_SWITCH_GPIO=21
+PIRIP_PATH=/home/pi/pirip
+NAME=pirip
+PIDFILE=/var/run/${NAME}.pid
+LOGFILE=/var/log/${NAME}.log
+PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}
+
+case "$1" in 
+    start)
+        ( rtl_fsk -g 49 -f 144490000 - -a 200000 -r ${RS} --code ${CODE} --mask ${RS} --filter ${TERM_ADDR} -q -b | \
+          frame_repeater ${DATA_BITS_PER_FRAME} ${TERM_ADDR} | \
+          rpitx_fsk - --code ${CODE} -r ${RS} -s ${RS} -g ${TR_SWITCH_GPIO} -- ) >>${LOGFILE} 2>&1 &
+        RETVAL=$?
+        echo $!>${PIDFILE}
+        [ $RETVAL = 0 ] && echo -ne '\t\t\t\t\t[  \033[32mOK\033[0m  ]\n'
+        ;;
+    stop)
+        parent=$(cat ${PIDFILE})
+        children=$(ps -o pid= --ppid ${parent})
+        kill ${children}
+        rm ${PIDFILE}
+        ;;
+    restart)
+        $0 stop
+        $0 start
+        ;;
+    status)
+        if [ -e ${PIDFILE} ]; then
+            echo ${NAME} is running, pid=`cat ${PIDFILE}`
+        else
+            echo$ {NAME} is NOT running
+            exit 1
+        fi
+        ;;
+    *)
+    echo "Usage: $0 {start|stop|status|restart}"
+esac
+
+exit 0 
