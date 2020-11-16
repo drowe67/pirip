@@ -6,7 +6,7 @@ Minimal hardware IP over VHF/UHF Radio using RpiTx and RTLSDRs [1].
 
 # Project Plan and Status
 
-Currently working on M4 -Over The Air (OTA) tests.
+Status Nov 2020 - working on M8.
 
 | Milestone | Description | Comment |
 | --- | --- | --- |
@@ -17,8 +17,9 @@ Currently working on M4 -Over The Air (OTA) tests.
 | M5 | ~~Pi running Tx and Rx~~ | Half duplex, loopback demo would be neat |
 | M6 | ~~Add LDPC FEC to waveform~~ | Needs to be tested/tuned OTA |
 | M7 | ~~Bidirectional half duplex Tx/Rx on single Pi~~ | frame repeater (ping) application developed and tested on the bench | 
-| M8 | TAP/TUN integration and demo IP link | What protocol? |
-| M9 | Document how to build simple wire antennas | |
+| M8 | Automated OTA test campaign | | 
+| M9 | TAP/TUN integration and demo IP link | What protocol? |
+| M10 | Document how to build simple wire antennas | |
 
 # Building
 
