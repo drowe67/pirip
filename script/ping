@@ -19,8 +19,16 @@ PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}
 PATH=${PIRIP_PATH}/codec2/build_linux/misc:${PIRIP_PATH}/codec2/build_linux/src:${PATH}
 
 function tx_burst_hackrf {
-    printf "%d Tx burst from HackRF...\n" `date +%s` 1>&2
-    freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${RS} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - 2>/dev/null | tlininterp - - 40 -d -f | hackrf_transfer -t - -s 4E6 -f 143.5E6 2>/dev/null 1>/dev/null
+    num_bursts=$1
+    pause_between_bursts=$2
+    tmp=$(mktemp)
+    freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${RS} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - 2>/dev/null | tlininterp - - 40 -d -f > ${tmp}
+    for (( i=1; i<=$num_bursts; i++ ))
+    do
+        printf "%d Tx burst %d from HackRF...\n" `date +%s` ${i} 1>&2
+        hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 2>/dev/null 1>/dev/null
+        sleep $pause_between_bursts
+    done
 }
 
 function start_rx {
@@ -37,7 +45,7 @@ function stop_service {
 
 case "$1" in 
     start)
-        ( start_rx && sleep 1 && tx_burst_hackrf && stop_service) 2>>${LOGFILE} &
+        ( start_rx && sleep 1 && tx_burst_hackrf 3 10 && stop_service) 2>>${LOGFILE} &
         ;;
     stop)
         stop_service
