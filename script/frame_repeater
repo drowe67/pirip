@@ -1,5 +1,5 @@
 #!/bin/bash -x
-# pirip service script
+# frame repeater service
 
 # TODO
 #   [X] way to send stderr to log file
@@ -13,7 +13,7 @@ DATA_BITS_PER_FRAME=256
 CODE=H_${DATA_BITS_PER_FRAME}_512_4
 TR_SWITCH_GPIO=21
 PIRIP_PATH=/home/pi/pirip
-NAME=pirip
+NAME=frame_repeater
 PIDFILE=/var/run/${NAME}.pid
 LOGFILE=/var/log/${NAME}.log
 PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}

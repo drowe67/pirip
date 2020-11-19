@@ -1,0 +1,61 @@
+#!/bin/bash
+# ping service script - sends bursts to the frame repeater and logs reply
+
+# TODO
+# [ ] receive it's own packets
+# [ ] log one one logfile
+# [ ] clean start up and shut down
+# [ ] send a sequence of packets
+
+TERM_ADDR=0x1
+RS=10000
+DATA_BITS_PER_FRAME=256
+CODE=H_${DATA_BITS_PER_FRAME}_512_4
+PIRIP_PATH=${PWD}/..
+NAME=ping
+PIDFILE=/var/run/${NAME}.pid
+LOGFILE=/var/log/${NAME}.log
+PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}
+PATH=${PIRIP_PATH}/codec2/build_linux/misc:${PIRIP_PATH}/codec2/build_linux/src:${PATH}
+
+function tx_burst_hackrf {
+    printf "%d Tx burst from HackRF...\n" `date +%s` 1>&2
+    freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${RS} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - 2>/dev/null | tlininterp - - 40 -d -f | hackrf_transfer -t - -s 4E6 -f 143.5E6 2>/dev/null 1>/dev/null
+}
+
+function start_rx {
+    rtl_fsk -g 49 -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 -L > /dev/null &
+    echo $!>${PIDFILE}
+}
+
+function stop_service {
+    echo "service stopping - bye!" 1>&2
+    parent=$(cat ${PIDFILE})
+    kill ${parent}
+    rm ${PIDFILE}
+}
+
+case "$1" in 
+    start)
+        ( start_rx && sleep 1 && tx_burst_hackrf && stop_service) 2>>${LOGFILE} &
+        ;;
+    stop)
+        stop_service
+        ;;
+    restart)
+        $0 stop
+        $0 start
+        ;;
+    status)
+        if [ -e ${PIDFILE} ]; then
+            echo ${NAME} is running, pid=`cat ${PIDFILE}`
+        else
+            echo$ {NAME} is NOT running
+            exit 1
+        fi
+        ;;
+    *)
+    echo "Usage: $0 {start|stop|status|restart}"
+esac
+
+exit 0 
