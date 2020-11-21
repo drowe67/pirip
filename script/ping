@@ -2,10 +2,11 @@
 # ping service script - sends bursts to the frame repeater and logs reply
 
 # TODO
-# [ ] receive it's own packets
-# [ ] log one one logfile
-# [ ] clean start up and shut down
-# [ ] send a sequence of packets
+# [X] receive it's own packets
+# [X] log one one logfile
+# [X] clean start up and shut down
+# [X] send a sequence of packets
+# [ ] test with Pi running frame_repeater OTC
 
 TERM_ADDR=0x1
 RS=10000
