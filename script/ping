@@ -23,13 +23,25 @@ function tx_burst_hackrf {
     num_bursts=$1
     pause_between_bursts=$2
     tmp=$(mktemp)
-    freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${RS} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - 2>/dev/null | tlininterp - - 40 -d -f > ${tmp}
-    for (( i=1; i<=$num_bursts; i++ ))
-    do
-        printf "%d Tx burst %d from HackRF...\n" `date +%s` ${i} 1>&2
-        hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 2>/dev/null 1>/dev/null
+    if [ -z ${verbose+x} ]; then
+        # quiet version
+        freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${RS} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - 2>/dev/null | tlininterp - - 40 -d -f > ${tmp}
+        for (( i=1; i<=$num_bursts; i++ ))
+        do
+            printf "%d Tx burst %d from HackRF...\n" `date +%s` ${i} 1>&2
+            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 2>/dev/null 1>/dev/null
         sleep $pause_between_bursts
-    done
+        done
+    else
+        # verbose version
+        freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${RS} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - | tlininterp - - 40 -d -f > ${tmp}
+        for (( i=1; i<=$num_bursts; i++ ))
+        do
+            printf "%d Tx burst %d from HackRF...\n" `date +%s` ${i} 1>&2
+            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6
+        sleep $pause_between_bursts
+        done
+    fi
 }
 
 function start_rx {
@@ -47,6 +59,11 @@ function stop_service {
 case "$1" in 
     start)
         ( start_rx && sleep 1 && tx_burst_hackrf 3 10 && stop_service) 2>>${LOGFILE} &
+        ;;
+    start_verbose)
+        verbose=1
+        # log output to stderr rather than logfile
+        start_rx && sleep 1 && tx_burst_hackrf 3 1 && stop_service
         ;;
     stop)
         stop_service
