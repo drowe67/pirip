@@ -45,7 +45,7 @@ function tx_burst_hackrf {
 }
 
 function start_rx {
-    rtl_fsk -g 49 -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 -L > /dev/null &
+    rtl_fsk -g 49 -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 -L $1 > /dev/null &
     echo $!>${PIDFILE}
 }
 
@@ -58,12 +58,17 @@ function stop_service {
 
 case "$1" in 
     start)
-        ( start_rx && sleep 1 && tx_burst_hackrf 3 10 && stop_service) 2>>${LOGFILE} &
+        ( start_rx "--filter ${TERM_ADDR}" && sleep 1 && tx_burst_hackrf $2 10 && stop_service) 2>>${LOGFILE} &
         ;;
     start_verbose)
+        # Show all tool outputs and log output to stderr rather than logfile
         verbose=1
-        # log output to stderr rather than logfile
-        start_rx && sleep 1 && tx_burst_hackrf 3 1 && stop_service
+        start_rx "--filter ${TERM_ADDR}" && sleep 1 && tx_burst_hackrf 1 1 && stop_service
+        ;;
+    start_loopback)
+        # Send packets from HackRF to RTLSDR on this machine (no filtering of packets)
+        verbose=1
+        start_rx && sleep 1 && tx_burst_hackrf 1 1 && stop_service
         ;;
     stop)
         stop_service
