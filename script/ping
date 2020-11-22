@@ -18,6 +18,7 @@ PIDFILE=/var/run/${NAME}.pid
 LOGFILE=/var/log/${NAME}.log
 PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}
 PATH=${PIRIP_PATH}/codec2/build_linux/misc:${PIRIP_PATH}/codec2/build_linux/src:${PATH}
+PAUSE=10
 
 function tx_burst_hackrf {
     num_bursts=$1
@@ -58,7 +59,7 @@ function stop_service {
 
 case "$1" in 
     start)
-        ( start_rx "--filter ${TERM_ADDR}" && sleep 1 && tx_burst_hackrf $2 10 && stop_service) 2>>${LOGFILE} &
+        ( start_rx "--filter ${TERM_ADDR}" && sleep 1 && tx_burst_hackrf $2 ${PAUSE} && stop_service) 2>>${LOGFILE} &
         ;;
     start_verbose)
         # Show all tool outputs and log output to stderr rather than logfile
@@ -87,6 +88,10 @@ case "$1" in
         ;;
     *)
     echo "Usage: $0 {start|stop|status|restart}"
+        echo ""
+        echo "start numPings - send numPing test frames to frame repeater, one every ${PAUSE} seconds, logfile is ${LOGFILE}"
+        echo "start_verbose  - send single test frame in foreground, no logfile"
+        echo "start_loopback - local loopback test, Tx/Rx a single packet"
 esac
 
 exit 0 
