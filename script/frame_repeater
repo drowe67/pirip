@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 # frame repeater service
 
 # TODO
@@ -18,20 +18,50 @@ PIDFILE=/var/run/${NAME}.pid
 LOGFILE=/var/log/${NAME}.log
 PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}
 
+function tx_burst_rpitx {
+    num_bursts=$1
+    pause_between_bursts=$2
+    tmp=$(mktemp)
+    for (( i=1; i<=$num_bursts; i++ ))
+    do
+        printf "%d Tx burst %d from RPiTx...\n" `date +%s` ${i} 1>&2
+        rpitx_fsk /dev/zero --code H_256_512_4 -r ${RS} -s ${RS} --testframes 1 -g 21 -m 2
+        sleep $pause_between_bursts
+    done
+}
+
+function start_rx {
+    rtl_fsk -g 49 -f 144490000 - -a 200000 -r ${RS} --code  H_256_512_4 --mask ${RS} -L $1 > /dev/null &
+    echo $!>${PIDFILE}
+}
+
+function stop_service {
+    echo "service stopping - bye!" 1>&2
+    parent=$(cat ${PIDFILE})
+    kill ${parent}
+    rm ${PIDFILE}
+}
+
 case "$1" in 
     start)
         ( rtl_fsk -g 49 -f 144490000 - -a 200000 -r ${RS} --code ${CODE} --mask ${RS} --filter ${TERM_ADDR} -q -b | \
           frame_repeater ${DATA_BITS_PER_FRAME} ${TERM_ADDR} | \
-          rpitx_fsk - --code ${CODE} -r ${RS} -s ${RS} -g ${TR_SWITCH_GPIO} -- ) >>${LOGFILE} 2>&1 &
-        RETVAL=$?
+          rpitx_fsk - --code ${CODE} -r ${RS} -s ${RS} -g ${TR_SWITCH_GPIO} --packed -- ) >>${LOGFILE} 2>&1 &
         echo $!>${PIDFILE}
-        [ $RETVAL = 0 ] && echo -ne '\t\t\t\t\t[  \033[32mOK\033[0m  ]\n'
+        ;;
+    start_verbose)
+        # run in the foreground and log to stderr instead of a logfile
+        rtl_fsk -g 49 -f 144490000 - -a 200000 -r ${RS} --code ${CODE} --mask ${RS} --filter ${TERM_ADDR} -q -b -v | \
+        frame_repeater ${DATA_BITS_PER_FRAME} ${TERM_ADDR} | \
+        rpitx_fsk - --code ${CODE} -r ${RS} -s ${RS} -g ${TR_SWITCH_GPIO} --packed --
+        ;;
+    start_loopback)
+        # Send packets from Pi to RTLSDR on this machine (no filtering of packets)
+        verbose=1
+        start_rx && sleep 1 && tx_burst_rpitx 1 1 && stop_service
         ;;
     stop)
-        parent=$(cat ${PIDFILE})
-        children=$(ps -o pid= --ppid ${parent})
-        kill ${children}
-        rm ${PIDFILE}
+        stop_service
         ;;
     restart)
         $0 stop
@@ -46,7 +76,11 @@ case "$1" in
         fi
         ;;
     *)
-    echo "Usage: $0 {start|stop|status|restart}"
+        echo "Usage: $0 {start|stop|status|restart}"
+        echo ""
+        echo "start          - start frame repeater service, logfile is ${LOGFILE}"
+        echo "start_verbose  - start frame repeater in foreground, no logfile"
+        echo "start_loopback - local loopback test, tx/rx a single packet"
 esac
 
 exit 0 

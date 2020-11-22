@@ -41,12 +41,17 @@ void freedv_unpack(unsigned char *bits, unsigned char *bytes, int nbits);
 
 bool running=true;
 static int terminate_calls = 0;
+ngfmdmasync *fmmod = NULL;
 
 static void terminate(int num) {
     terminate_calls++;
     running=false;
     fprintf(stderr,"Caught signal %d - Terminating\n", num);
-    if (terminate_calls >= 5) exit(1);
+    if (terminate_calls >= 5) {
+        // make sure TX is off if we have to abort
+        if (fmmod) delete fmmod;
+        exit(1);
+    }
 }
 
 
@@ -109,7 +114,6 @@ int main(int argc, char **argv)
     int   m = 2;
     int   log2m;
     float shiftHz = -1;
-    ngfmdmasync *fmmod = NULL;
     struct freedv *freedv = NULL;
     struct freedv_advanced adv;
     int fsk_ldpc = 0;
@@ -217,7 +221,7 @@ int main(int argc, char **argv)
             }                  
             testframes = 1;
             Nframes = atoi(optarg);
-            fprintf(stderr, "Sending %d testframes...\n", Nframes);
+            fprintf(stderr, "rpitx_fsk: Sending %d testframe(s)...\n", Nframes);
             break;
         case 'g':
             strcpy(ant_switch_gpio, optarg);
@@ -266,7 +270,7 @@ int main(int argc, char **argv)
         assert(freedv != NULL);
         data_bits_per_frame = freedv_get_bits_per_modem_frame(freedv);
         bits_per_frame = freedv_tx_fsk_ldpc_bits_per_frame(freedv);
-        fprintf(stderr, "FSK LDPC mode code: %s data_bits_per_frame: %d\n", adv.codename, data_bits_per_frame);
+        fprintf(stderr, "rpitx_fsk: FSK LDPC mode code: %s data_bits_per_frame: %d\n", adv.codename, data_bits_per_frame);
 
         /* set up preamble */
         /* TODO: this should be a freeDV API function */        
@@ -290,8 +294,8 @@ int main(int argc, char **argv)
     //fmmod = new ngfmdmasync(frequency,SymbolRate,14,FIFO_SIZE); 	
     //fmmod->clkgpio::disableclk(4);
     
-    fprintf(stderr, "Frequency: %4.1f MHz Rs: %4.1f kHz Shift: %4.1f kHz M: %d \n", frequency/1E6, SymbolRate/1E3, shiftHz/1E3, m);
-    fprintf(stderr, "data_bits_per_frame: %d bits_per_frame: %d\n", data_bits_per_frame, bits_per_frame);
+    fprintf(stderr, "rpitx_fsk: Frequency: %4.1f MHz Rs: %4.1f kHz Shift: %4.1f kHz M: %d \n", frequency/1E6, SymbolRate/1E3, shiftHz/1E3, m);
+    fprintf(stderr, "rpitx_fsk: data_bits_per_frame: %d bits_per_frame: %d\n", data_bits_per_frame, bits_per_frame);
     
     if ((carrier_test == 0) && (one_zero_test == 0)) {
         // FSK Tx --------------------------------------------------------------------
@@ -343,7 +347,7 @@ int main(int argc, char **argv)
                 float tdelay = (float)bufferSamples/SymbolRate;
                 usleep((int)(tdelay*1E6));
 
-                printf("End of this burst\n");
+                printf("rpitx_fsk: End of this burst\n");
                 
                 // transmitter carrier off between bursts
                 delete fmmod;
