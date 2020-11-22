@@ -17,6 +17,7 @@ NAME=frame_repeater
 PIDFILE=/var/run/${NAME}.pid
 LOGFILE=/var/log/${NAME}.log
 PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}
+GAIN="${GAIN:-49}"
 
 function tx_burst_rpitx {
     num_bursts=$1
@@ -31,7 +32,7 @@ function tx_burst_rpitx {
 }
 
 function start_rx {
-    rtl_fsk -g 49 -f 144490000 - -a 200000 -r ${RS} --code  H_256_512_4 --mask ${RS} -L $1 > /dev/null &
+    rtl_fsk -g ${GAIN} -f 144490000 - -a 200000 -r ${RS} --code  H_256_512_4 --mask ${RS} -L $1 > /dev/null &
     echo $!>${PIDFILE}
 }
 
@@ -76,11 +77,11 @@ case "$1" in
         fi
         ;;
     *)
-        echo "Usage: $0 {start|stop|status|restart}"
+        echo "Usage: sudo $0 {start|stop|status|restart}"
         echo ""
-        echo "start          - start frame repeater service, logfile is ${LOGFILE}"
-        echo "start_verbose  - start frame repeater in foreground, no logfile"
-        echo "start_loopback - local loopback test, tx/rx a single packet"
+        echo "start          - Start frame repeater service, logfile is ${LOGFILE}"
+        echo "start_verbose  - Start frame repeater in foreground, no logfile"
+        echo "start_loopback - Local loopback test, tx/rx a single frame"
 esac
 
 exit 0 
