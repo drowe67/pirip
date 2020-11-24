@@ -60,7 +60,28 @@ Service scripts have been written to wrap up the complex command lines.
    ![Frame Repeater](doc/frame_repeater_test.png)
    ![Frame Repeater Bench Test](doc/repeater_otc.jpg)
 
-# Command Line Testing
+## Service command lines
+
+1. Loopback test is a good start, this checks each terminal is working stand alone.  These tests send a burst from the Termnals Tx to it's Rx:
+   ```
+   laptop$ sudo ./ping start_loopback
+   ```
+   ```
+   pi$ sudo ./frame_repeater start_loopback
+   ```
+   The verbose options are useful for short tests to make sure the software is starting and running OK.
+   
+1. To use the frame repeater start the `frame_repeater` service on the Pi (Terminal 2):
+   ```
+   pi$ sudo ./frame_repeater start
+   ```
+   Then start the Terminal 1 `ping` service:
+   ```
+   laptop$ sudo ./ping start_loopback 6
+   ```
+   ... will send 6 packets, 10 seconds apart (a 1 minute total run time).  Look at /var/log/ping for results.
+
+# Useful Command Lines
 
 1. Transmit two tone test signal for Pi:
    ```
