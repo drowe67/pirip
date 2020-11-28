@@ -21,14 +21,8 @@ GAIN="${GAIN:-49}"
 
 function tx_burst_rpitx {
     num_bursts=$1
-    pause_between_bursts=$2
-    tmp=$(mktemp)
-    for (( i=1; i<=$num_bursts; i++ ))
-    do
-        printf "%d Tx burst %d from RPiTx...\n" `date +%s` ${i} 1>&2
-        rpitx_fsk /dev/zero --code H_256_512_4 -r ${RS} -s ${RS} --testframes 1 -g 21 -m 2
-        sleep $pause_between_bursts
-    done
+    rpitx_fsk /dev/zero --code H_256_512_4 -r ${RS} -s ${RS} --testframes 3 --bursts ${num_bursts} --delay 2000 -g 21 -m 2
+    #rpitx_fsk -c
 }
 
 function start_rx {
@@ -57,9 +51,18 @@ case "$1" in
         rpitx_fsk - --code ${CODE} -r ${RS} -s ${RS} -g ${TR_SWITCH_GPIO} --packed --
         ;;
     start_loopback)
-        # Send packets from Pi to RTLSDR on this machine (no filtering of packets)
+        # Send packets from Pi to RTLSDR on this machine (no filtering of packets or frame repeater)
+        set -x
         verbose=1
-        start_rx && sleep 1 && tx_burst_rpitx 1 1 && stop_service
+        start_rx
+        sleep 1
+        if ! ps -p $(cat ${PIDFILE}); then
+            echo "rtl_fsk failed to start!"
+            rm ${PIDFILE}
+            exit 1
+        fi   
+        tx_burst_rpitx $2
+        stop_service
         ;;
     stop)
         stop_service
@@ -79,9 +82,9 @@ case "$1" in
     *)
         echo "Usage: sudo $0 {start|stop|status|restart}"
         echo ""
-        echo "start          - Start frame repeater service, logfile is ${LOGFILE}"
-        echo "start_verbose  - Start frame repeater in foreground, no logfile"
-        echo "start_loopback - Local loopback test, tx/rx a single frame"
+        echo "start                    - Start frame repeater service, logfile is ${LOGFILE}"
+        echo "start_verbose            - Start frame repeater in foreground, no logfile"
+        echo "start_loopback numBursts - Local loopback test, tx/rx numBursts"
 esac
 
 exit 0 
