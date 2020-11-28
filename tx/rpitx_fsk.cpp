@@ -44,21 +44,14 @@ static int terminate_calls = 0;
 ngfmdmasync *fmmod = NULL;
 float initial_frequency = 0.0;
 
+// Signals like Ctrl-C or segfaults get handled here
 static void terminate(int num) {
     terminate_calls++;
     running=false;
     fprintf(stderr,"Caught signal %d - Terminating\n", num);
-    fmmod->clkgpio::HaveLock();
     if (terminate_calls >= 5) {
-        fprintf(stderr, "finishing....\n");
-        fmmod->clkgpio::HaveLock();
+        fprintf(stderr, "Too many signals - finishing....\n");
         fmmod->clkgpio::print_clock_tree();
-
-        for(int i=0; i<100; i++) {
-            fprintf(stderr, "getcbposition: 0x%x GetCurrentSample: %d GetBufferAvailable: %d isrunning: %d\n",
-                    (uint32_t)fmmod->getcbposition(), fmmod->GetCurrentSample(), fmmod->GetBufferAvailable(), fmmod->isrunning());
-            usleep(1000);
-        }
         // make sure TX is off if we have to abort
         if (fmmod) delete fmmod;
         exit(1);
@@ -368,7 +361,7 @@ int main(int argc, char **argv)
         uint8_t tx_frame[bits_per_frame];
 
         if (testframes) {
-            /* FSK_LDPC Tx in test frame mode */
+            /* FSK_LDPC Tx in test frame mode -------------------------------------------*/
 
             assert(fsk_ldpc);
             ofdm_generate_payload_data_bits(data_bits, data_bits_per_frame);
@@ -431,7 +424,7 @@ int main(int argc, char **argv)
 
         }
         else {
-            /* regular FSK or FSK_LDPC Tx operation with bits/bytes from stdin */     
+            /* regular FSK or FSK_LDPC Tx operation with bits/bytes from stdin ----------------------*/     
             int nframes = 0;
             while(1) {
                 uint8_t burst_control;
@@ -552,16 +545,8 @@ int main(int argc, char **argv)
     finished:
     check_pllc();
     fprintf(stderr, "finishing....\n");
-    fmmod->clkgpio::HaveLock();
-    fmmod->clkgpio::print_clock_tree();
-    for(int i=0; i<100; i++) {
-        fprintf(stderr, "getcbposition: 0x%x GetCurrentSample: %d GetBufferAvailable: %d isrunning: %d\n",
-                (uint32_t)fmmod->getcbposition(), fmmod->GetCurrentSample(), fmmod->GetBufferAvailable(), fmmod->isrunning());
-        usleep(1000);
-    }
     
-    if (fmmod) delete fmmod;
-    
+    if (fmmod) delete fmmod;    
     if (fsk_ldpc) freedv_close(freedv);
 
     if (*ant_switch_gpio) {
