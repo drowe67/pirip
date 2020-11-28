@@ -35,6 +35,12 @@ $ ./build_codec2.sh
 $ ./build_rpitx.sh
 $ cd tx && make
 ```
+At the end of `/boot/config.txt` you need:
+```
+gpu_freq=250
+force_turbo=1
+```
+Then reboot your Pi.
 
 ## RTLSDR FSK Receiver
 
