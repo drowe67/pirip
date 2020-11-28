@@ -14,9 +14,9 @@
     as our sensitive RX will be picking up what we are sending
 
   TODO:
-  [ ] Show it can echo one frame
-  [ ] Show it can echo multiple frames
-  [ ] leave running for a few hours with no lockups
+  [X] Show it can echo one frame
+  [X] Show it can echo multiple frames
+  [X] leave running for a few hours with no lockups
 */
 
 #include <assert.h>
@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "freedv_api_internal.h"
 
@@ -35,7 +36,8 @@ int main(int argc, char *argv[]) {
     int state = IDLE;
     int next_state, bytes_in, bytes_out, nframes, ret, nclocks;
     uint8_t burst_control, source_byte;
-
+    time_t last_time = 0;
+    
     if (argc < 3) {
         fprintf(stderr, "usage: %s dataBitsPerFrame sourceByte\n", argv[0]);
         exit(1);
@@ -105,9 +107,12 @@ int main(int argc, char *argv[]) {
         default:
             assert(0);
         }
-        /* just log ouput when state changes to avoid to omuch noise */
-        if ((state != next_state) || (rx_status & FREEDV_RX_BITS))
+        /* just log output when state changes to avoid too much noise. Also log every 10s as a heartbeat, if that stops it means
+           rtl_fsk or this program has choked */
+        if ((state != next_state) || (rx_status & FREEDV_RX_BITS) || (time(NULL) > (last_time + 10))) {
             fprintf(stderr, "frame_repeater: [%d] state %d next_state: %d rx_status: 0x%02x\n", nclocks, state, next_state, rx_status);
+            last_time = time(NULL);
+        }
        state = next_state;
     }
 
