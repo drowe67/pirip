@@ -6,7 +6,7 @@
 # [X] log one one logfile
 # [X] clean start up and shut down
 # [X] send a sequence of packets
-# [ ] test with Pi running frame_repeater OTC
+# [X] test with Pi running frame_repeater OTC
 
 TERM_ADDR=0x1
 RS=10000
@@ -14,12 +14,14 @@ DATA_BITS_PER_FRAME=256
 CODE=H_${DATA_BITS_PER_FRAME}_512_4
 PIRIP_PATH=${PWD}/..
 NAME=ping
-PIDFILE=/var/run/${NAME}.pid
+PIDFILE1=/var/run/${NAME}1.pid
+PIDFILE2=/var/run/${NAME}2.pid
 LOGFILE=/var/log/${NAME}.log
 PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}
 PATH=${PIRIP_PATH}/codec2/build_linux/misc:${PIRIP_PATH}/codec2/build_linux/src:${PATH}
-PAUSE=10
+PAUSE="${PAUSE:-10}"
 GAIN="${GAIN:-49}"
+HACKRF_TX_GAIN="${HACKRF_TX_GAIN:-40}"
 
 function tx_burst_hackrf {
     num_bursts=$1
@@ -31,7 +33,7 @@ function tx_burst_hackrf {
         for (( i=1; i<=$num_bursts; i++ ))
         do
             printf "%d Tx burst %d from HackRF...\n" `date +%s` ${i} 1>&2
-            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 2>/dev/null 1>/dev/null
+            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN} 2>/dev/null 1>/dev/null
         sleep $pause_between_bursts
         done
     else
@@ -40,7 +42,7 @@ function tx_burst_hackrf {
         for (( i=1; i<=$num_bursts; i++ ))
         do
             printf "%d Tx burst %d from HackRF...\n" `date +%s` ${i} 1>&2
-            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6
+            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN}
         sleep $pause_between_bursts
         done
     fi
@@ -48,19 +50,22 @@ function tx_burst_hackrf {
 
 function start_rx {
     rtl_fsk -g ${GAIN} -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 -L $1 > /dev/null &
-    echo $!>${PIDFILE}
+    echo $!>${PIDFILE2}
 }
 
 function stop_service {
     echo "service stopping - bye!" 1>&2
-    parent=$(cat ${PIDFILE})
-    kill ${parent}
-    rm ${PIDFILE}
+    pid2=$(cat ${PIDFILE2})
+    kill ${pid2}
+    pid1=$(cat ${PIDFILE1})
+    rm ${PIDFILE1} ${PIDFILE2}
+    kill ${pid1}
 }
 
 case "$1" in 
     start)
         ( start_rx "--filter ${TERM_ADDR}" && sleep 1 && tx_burst_hackrf $2 ${PAUSE} && stop_service) 2>>${LOGFILE} &
+        echo $!>${PIDFILE1}
         ;;
     start_verbose)
         # Show all tool outputs and log output to stderr rather than logfile
@@ -72,13 +77,13 @@ case "$1" in
         verbose=1
         start_rx && sleep 1 && tx_burst_hackrf 1 1 && stop_service
         ;;
-     start_carrier)
+    start_carrier)
         # Send carrier from HackRF at same Tx power as FSK signal, much easier to measure on a spec-an
         fsk_get_test_bits - 60000 | fsk_mod -t -c -a 30000 2 40000 1000 1000 2000 - - | \
         tlininterp - - 100 -d -f | \
-        hackrf_transfer -t - -s 4E6 -f 143.5E6
+        hackrf_transfer -t - -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN}
         ;;
-   stop)
+    stop)
         stop_service
         ;;
     restart)
