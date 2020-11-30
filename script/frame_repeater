@@ -1,0 +1,90 @@
+#!/bin/bash
+# frame repeater service
+
+# TODO
+#   [X] way to send stderr to log file
+#   [ ] way to set freq at start up
+#   [ ] way to set Rs and M at start up
+#   [ ] way to start as frame repeater or beacon
+
+TERM_ADDR=0x2
+RS=10000
+DATA_BITS_PER_FRAME=256
+CODE=H_${DATA_BITS_PER_FRAME}_512_4
+TR_SWITCH_GPIO=21
+PIRIP_PATH=/home/pi/pirip
+NAME=frame_repeater
+PIDFILE=/var/run/${NAME}.pid
+LOGFILE=/var/log/${NAME}.log
+PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}
+GAIN="${GAIN:-49}"
+
+function tx_burst_rpitx {
+    num_bursts=$1
+    rpitx_fsk /dev/zero --code H_256_512_4 -r ${RS} -s ${RS} --testframes 3 --bursts ${num_bursts} --delay 2000 -g 21 -m 2
+    #rpitx_fsk -c
+}
+
+function start_rx {
+    rtl_fsk -g ${GAIN} -f 144490000 - -a 200000 -r ${RS} --code  H_256_512_4 --mask ${RS} -L $1 > /dev/null &
+    echo $!>${PIDFILE}
+}
+
+function stop_service {
+    echo "service stopping - bye!" 1>&2
+    parent=$(cat ${PIDFILE})
+    kill ${parent}
+    rm ${PIDFILE}
+}
+
+case "$1" in 
+    start)
+        ( rtl_fsk -g 49 -f 144490000 - -a 200000 -r ${RS} --code ${CODE} --mask ${RS} --filter ${TERM_ADDR} -q -b | \
+          frame_repeater ${DATA_BITS_PER_FRAME} ${TERM_ADDR} | \
+          rpitx_fsk - --code ${CODE} -r ${RS} -s ${RS} -g ${TR_SWITCH_GPIO} --packed -- ) >>${LOGFILE} 2>&1 &
+        echo $!>${PIDFILE}
+        ;;
+    start_verbose)
+        # run in the foreground and log to stderr instead of a logfile
+        rtl_fsk -g 49 -f 144490000 - -a 200000 -r ${RS} --code ${CODE} --mask ${RS} --filter ${TERM_ADDR} -q -b -v | \
+        frame_repeater ${DATA_BITS_PER_FRAME} ${TERM_ADDR} | \
+        rpitx_fsk - --code ${CODE} -r ${RS} -s ${RS} -g ${TR_SWITCH_GPIO} --packed --
+        ;;
+    start_loopback)
+        # Send packets from Pi to RTLSDR on this machine (no filtering of packets or frame repeater)
+        set -x
+        verbose=1
+        start_rx
+        sleep 1
+        if ! ps -p $(cat ${PIDFILE}); then
+            echo "rtl_fsk failed to start!"
+            rm ${PIDFILE}
+            exit 1
+        fi   
+        tx_burst_rpitx $2
+        stop_service
+        ;;
+    stop)
+        stop_service
+        ;;
+    restart)
+        $0 stop
+        $0 start
+        ;;
+    status)
+        if [ -e ${PIDFILE} ]; then
+            echo ${NAME} is running, pid=`cat ${PIDFILE}`
+        else
+            echo$ {NAME} is NOT running
+            exit 1
+        fi
+        ;;
+    *)
+        echo "Usage: sudo $0 {start|stop|status|restart}"
+        echo ""
+        echo "start                    - Start frame repeater service, logfile is ${LOGFILE}"
+        echo "start_verbose            - Start frame repeater in foreground, no logfile"
+        echo "start_loopback numBursts - Local loopback test, tx/rx numBursts"
+esac
+
+exit 0 

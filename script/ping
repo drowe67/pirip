@@ -1,0 +1,130 @@
+#!/bin/bash
+# ping service script - sends bursts to the frame repeater and logs reply
+
+# TODO
+# [X] receive it's own packets
+# [X] log one one logfile
+# [X] clean start up and shut down
+# [X] send a sequence of packets
+# [X] test with Pi running frame_repeater OTC
+
+TERM_ADDR=0x1
+RS=10000
+DATA_BITS_PER_FRAME=256
+CODE=H_${DATA_BITS_PER_FRAME}_512_4
+PIRIP_PATH=${PWD}/..
+NAME=ping
+PIDFILE1=/var/run/${NAME}1.pid
+PIDFILE2=/var/run/${NAME}2.pid
+LOGFILE=/var/log/${NAME}.log
+PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}
+PATH=${PIRIP_PATH}/codec2/build_linux/misc:${PIRIP_PATH}/codec2/build_linux/src:${PATH}
+PAUSE="${PAUSE:-10}"
+GAIN="${GAIN:-49}"
+HACKRF_TX_GAIN="${HACKRF_TX_GAIN:-40}"
+
+function tx_burst_hackrf {
+    num_bursts=$1
+    pause_between_bursts=$2
+    tmp=$(mktemp)
+    if [ -z ${verbose+x} ]; then
+        # quiet version
+        freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${RS} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - 2>/dev/null | tlininterp - - 40 -d -f > ${tmp}
+        for (( i=1; i<=$num_bursts; i++ ))
+        do
+            printf "%d Tx burst %d from HackRF...\n" `date +%s` ${i} 1>&2
+            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN} 2>/dev/null 1>/dev/null
+        sleep $pause_between_bursts
+        done
+    else
+        # verbose version
+        freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${RS} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - | tlininterp - - 40 -d -f > ${tmp}
+        for (( i=1; i<=$num_bursts; i++ ))
+        do
+            printf "%d Tx burst %d from HackRF...\n" `date +%s` ${i} 1>&2
+            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN}
+        sleep $pause_between_bursts
+        done
+    fi
+}
+
+function start_rx {
+    rtl_fsk -g ${GAIN} -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 -L $1 > /dev/null &
+    echo $!>${PIDFILE2}
+}
+
+function stop_service {
+    echo "service stopping - bye!" 1>&2
+    if [ -e ${PIDFILE2} ]; then
+        pid2=$(cat ${PIDFILE2})
+        rm ${PIDFILE2}
+        kill ${pid2}
+    fi
+    if [ -e ${PIDFILE1} ]; then
+        pid1=$(cat ${PIDFILE1})
+        rm ${PIDFILE1}
+        kill ${pid1}
+    fi
+}
+
+
+function check_running {
+    if [ -e ${PIDFILE1} ]; then
+        echo "service already running... pid: ${PIDFILE1}"
+        exit 1
+    fi
+    if [ -e ${PIDFILE2} ]; then
+        echo "service already running... pid: ${PIDFILE2}"
+        exit 1
+    fi
+}
+
+case "$1" in 
+    start)
+        check_running
+        ( start_rx "--filter ${TERM_ADDR}" && sleep 1 && tx_burst_hackrf $2 ${PAUSE} && stop_service) 2>>${LOGFILE} &
+        echo $!>${PIDFILE1}
+        ;;
+    start_verbose)
+        check_running
+        # Show all tool outputs and log output to stderr rather than logfile
+        verbose=1
+        start_rx "--filter ${TERM_ADDR}" && sleep 1 && tx_burst_hackrf 1 1 && stop_service
+        ;;
+    start_loopback)
+        check_running
+        # Send packets from HackRF to RTLSDR on this machine (no filtering of packets)
+        verbose=1
+        start_rx && sleep 1 && tx_burst_hackrf 1 1 && stop_service
+        ;;
+    start_carrier)
+        # Send carrier from HackRF at same Tx power as FSK signal, much easier to measure on a spec-an
+        fsk_get_test_bits - 60000 | fsk_mod -t -c -a 30000 2 40000 1000 1000 2000 - - | \
+        tlininterp - - 100 -d -f | \
+        hackrf_transfer -t - -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN}
+        ;;
+    stop)
+        stop_service
+        ;;
+    restart)
+        $0 stop
+        $0 start
+        ;;
+    status)
+        if [ -e ${PIDFILE1} ]; then
+            echo ${NAME} is running, pid=`cat ${PIDFILE}`
+        else
+            echo$ {NAME} is NOT running
+            exit 1
+        fi
+        ;;
+    *)
+    echo "Usage: sudo $0 {start|stop|status|restart}"
+        echo ""
+        echo "start numPings - send numPing bursts to frame repeater, one every ${PAUSE} seconds, logfile is ${LOGFILE}"
+        echo "start_verbose  - send single burst to frame repeater in foreground, no logfile"
+        echo "start_loopback - local loopback test, Tx/Rx a single burst of 3 frames"
+        echo "start_carrier  - Send carrier from HackRF at same tx power as FSK signal"
+esac
+
+exit 0 

@@ -6,7 +6,7 @@ Minimal hardware IP over VHF/UHF Radio using RpiTx and RTLSDRs [1].
 
 # Project Plan and Status
 
-Status Nov 2020 - working on M8.
+Status Dec 2020 - working on M9.
 
 | Milestone | Description | Comment |
 | --- | --- | --- |
@@ -17,9 +17,10 @@ Status Nov 2020 - working on M8.
 | M5 | ~~Pi running Tx and Rx~~ | Half duplex, loopback demo would be neat |
 | M6 | ~~Add LDPC FEC to waveform~~ | Needs to be tested/tuned OTA |
 | M7 | ~~Bidirectional half duplex Tx/Rx on single Pi~~ | frame repeater (ping) application developed and tested on the bench | 
-| M8 | Automated OTA test campaign | | 
-| M9 | TAP/TUN integration and demo IP link | What protocol? |
-| M10 | Document how to build simple wire antennas | |
+| M8 | ~~Automated test system~~ | service scripts and 24 hour bench test completed | 
+| M9 | OTA physical layer tests | |
+| M10 | TAP/TUN integration and demo IP link | What protocol? |
+| M11 | Document how to build simple wire antennas | |
 
 # Building
 
@@ -35,10 +36,16 @@ $ ./build_codec2.sh
 $ ./build_rpitx.sh
 $ cd tx && make
 ```
+At the end of `/boot/config.txt` you need:
+```
+gpu_freq=250
+force_turbo=1
+```
+Then reboot your Pi.
 
 ## RTLSDR FSK Receiver
 
-On your laptop/PC:
+On your Pi (or laptop/PC):
 ```
 $ sudo apt update
 $ sudo apt install libusb-1.0-0-dev git cmake
@@ -47,7 +54,43 @@ $ ./build_csdr.sh
 $ ./build_rtlsdr.sh
 ```
 
-# Testing
+# Frame Repeater Automated Testing
+
+A Frame Repeater has been developed to test the physical layer over the air.  Terminal 1 sends a burst of frames to Terminal 2, which echoes the same frames back to Terminal 1.  Terminal 1 logs metadata for each frame (Signal and Noise Power, SNR, time of arrival).  The system is automated, so that it can run for hours unattended.  By analysing the log files the Packet Error Rate (PER) and SNR of both legs of the link can be analysed.  Knowing the gain of the RTLSDR receiver, we can use signal power S, and noise power N to estimate the link budget and local noise density (EMI) at the receiver.
+
+Terminal 1 is a laptop with a HackRF Tx and RTLSDR Rx.  Terminal 2 is a Pi running rpitx and a RTLSDR.
+
+Service scripts have been written to wrap up the complex command lines.
+
+`scripts/ping` is the service that sends the Tx bursts, and logs data on the received bursts; `scripts/frame_repeater` is the frame repeater service that runs on the Pi.  Both service scripts include debug/test modes and command line help.  The `start_loopback` command is a good way to test the local Tx/Rx is working OK.  A nearby SSB radio tuned to the same frequency is useful to monitor transmissions.
+
+   ![Frame Repeater](doc/frame_repeater_test.png)
+   ![Frame Repeater Bench Test](doc/repeater_otc.jpg)
+
+## Service command lines
+
+1. Loopback test is a good start, this checks each terminal is working stand alone.  These tests send a burst from the Termnals Tx to it's Rx:
+   ```
+   laptop$ sudo ./ping start_loopback
+   ```
+   ```
+   pi$ sudo ./frame_repeater start_loopback
+   ```
+   The verbose options are useful for short tests to make sure the software is starting and running OK.
+   
+1. To use the frame repeater start the `frame_repeater` service on the Pi (Terminal 2):
+   ```
+   pi$ sudo ./frame_repeater start
+   ```
+   Then start the Terminal 1 `ping` service:
+   ```
+   laptop$ sudo ./ping start_loopback 6
+   ```
+   ... will send 6 packets, 10 seconds apart (a 1 minute total run time).  Look at /var/log/ping for results.
+
+# Useful Command Lines
+
+This section contains command lines that were used during development to build up the system.  Some are pretty complex and not easily remembered, so I have logged them here.
 
 1. Transmit two tone test signal for Pi:
    ```
@@ -73,7 +116,7 @@ $ ./build_rtlsdr.sh
    Note this is tuned about 10kHz low, to put the two tones above the rtl_sdr DC line.  
 1. Demod GUI Dashboard. Open a new console and start `dash.py`:
    ```
-   ~/pirip$ netcat -luk 8001 | ./src/dash.py
+   ~/pirip$ netcat -luk 8001 | ./script/dash.py
    ```
    In another console start the FSK demod:
    ```
@@ -254,18 +297,15 @@ $ ./build_rtlsdr.sh
    $ ./src/rtl_fsk -g 49 -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 --filter 0x1 | hexdump
    ```
    Then send test frames from HackRF on laptop, e.g. bursts of 3 frames:
-   ```
+    ```
    $ ./src/freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs 10000 --tone1 10000 --shift 10000 -a 30000 FSK_LDPC /dev/zero - | ./misc/tlininterp - - 40 -d -f | hackrf_transfer -t - -s 4E6 -f 143.5E6
    ```
    This uses a source addressing scheme to filter out locally transmitted frames. In the example above, the laptop has
    address 0x1, and the Pi addess 0x2.  We tell the rtl_fsk Rx 0x1 to ignore any packets sent from 0x1.  This neatly prevents the frame repeater from hearing it's own packets and going into a loop.
 
-   ![Frame Repeater Bench Test](doc/repeater_otc.jpg)
-
 # Reading Further
 
-1. [Open IP over VHF/UHF 1](http://www.rowetel.com/?p=7207) - Blog post introducing this project
-1. [Open IP over VHF/UHF 2](http://www.rowetel.com/?p=7334) - Second blog post on uncoded OTA tests
+1. Open IP over VHF/UHF [Part 1](http://www.rowetel.com/?p=7207) [Part 2](http://www.rowetel.com/?p=7334) [Part 3](http://www.rowetel.com/?p=7567)
 1. [FSK_LDPC Data Mode](http://www.rowetel.com/?p=7467) - Physical layer design and testing
 1. [Codec 2 FSK Raw Data Modes](https://github.com/drowe67/codec2/blob/master/README_data.md)
 1. [Codec 2 FSK Modem](https://github.com/drowe67/codec2/blob/master/README_fsk.md)

@@ -41,12 +41,21 @@ void freedv_unpack(unsigned char *bits, unsigned char *bytes, int nbits);
 
 bool running=true;
 static int terminate_calls = 0;
+ngfmdmasync *fmmod = NULL;
+float initial_frequency = 0.0;
 
+// Signals like Ctrl-C or segfaults get handled here
 static void terminate(int num) {
     terminate_calls++;
     running=false;
     fprintf(stderr,"Caught signal %d - Terminating\n", num);
-    if (terminate_calls >= 5) exit(1);
+    if (terminate_calls >= 5) {
+        fprintf(stderr, "Too many signals - finishing....\n");
+        fmmod->clkgpio::print_clock_tree();
+        // make sure TX is off if we have to abort
+        if (fmmod) delete fmmod;
+        exit(1);
+    }
 }
 
 
@@ -73,7 +82,50 @@ void calculate_and_insert_crc(uint8_t data_bits[], int data_bits_per_frame) {
     freedv_unpack(data_bits+data_bits_per_frame-16, crc16_bytes, 16);
 }
 
+
+/* Sanity check PLLC.  During development this was getting modified outside of rpitx. 
+   Fix is to add "force_turbo=1" to the end of /boot/config.txt */
+
+#define PLLC_CTRL (0x1120 / 4) // from libpitx/src/gpio.h
+
+float initial_pllc_freq() {
+    volatile uint32_t *gpioreg = fmmod->clkgpio::gpioreg;
+    return 19.2 * 1E6 * ((float)(gpioreg[PLLC_CTRL] & 0x3ff) + ((float)gpioreg[PLLC_FRAC]) / ((float)(1 << 20)));
+}
+
+void check_pllc() {
+    volatile uint32_t *gpioreg = fmmod->clkgpio::gpioreg;
+    float current_freq = 19.2 * 1E6 * ((float)(gpioreg[PLLC_CTRL] & 0x3ff) + ((float)gpioreg[PLLC_FRAC]) / ((float)(1 << 20)));
+
+    float delta = fabs(current_freq - initial_frequency)/initial_frequency;
+    if (delta > 0.01) {
+        fprintf(stderr, "PLLC PDIV=%d NDIV=%d FRAC=%d  ", (gpioreg[PLLC_CTRL] >> 12)&0x7, gpioreg[PLLC_CTRL] & 0x3ff, gpioreg[PLLC_FRAC]);
+        fprintf(stderr, " %f MHz\n", 19.2 * ((float)(gpioreg[PLLC_CTRL] & 0x3ff) + ((float)gpioreg[PLLC_FRAC]) / ((float)(1 << 20))));
+        fprintf(stderr, "\nPLLC getting modified outside of rpitx!  Add \"force_turbo=1\" to the end of /boot/config.txt\n");
+        delete fmmod;
+        exit(1);
+    }
+}
+
+
+// My attempt at a function to send samples to the DMA circular
+// buffer.  Not sure if this is any better than ngfmdamsync functions!
+// Interesting area for further work.
+int SetFrequencySampleNonBlocking(ngfmdmasync *fmmod, float Frequency)
+{
+    int Index = fmmod->GetUserMemIndex();
+    if (Index == -1) {
+        return -1;
+    } else {
+	fmmod->sampletab[Index]=(0x5A<<24)|fmmod->GetMasterFrac(Frequency);
+	fmmod->PushSample(Index);
+        return 0;
+    }
+}
+
+// FSK Modulate and Tx a frame of bits
 void modulate_frame(ngfmdmasync *fmmod, float shiftHz, int m, uint8_t tx_frame[], int bits_per_frame) {
+    assert(fmmod != NULL);
     for(int bit_i=0; bit_i<bits_per_frame;) {
         /* generate the symbol number from the bit stream, 
            e.g. 0,1 for 2FSK, 0,1,2,3 for 4FSK */
@@ -85,8 +137,9 @@ void modulate_frame(ngfmdmasync *fmmod, float shiftHz, int m, uint8_t tx_frame[]
             bit_i++;
         }
         float VCOfreqHz = shiftHz*sym;
-        fmmod->SetFrequencySamples(&VCOfreqHz,1);
+        while (SetFrequencySampleNonBlocking(fmmod,VCOfreqHz)) usleep(100);
     }
+
 }
 
 
@@ -108,7 +161,6 @@ int main(int argc, char **argv)
     int   m = 2;
     int   log2m;
     float shiftHz = -1;
-    ngfmdmasync *fmmod;
     struct freedv *freedv = NULL;
     struct freedv_advanced adv;
     int fsk_ldpc = 0;
@@ -123,6 +175,7 @@ int main(int argc, char **argv)
     int rpitx_fsk_fifo = 0;
     int packed = 0;
     uint8_t source_byte = 0;
+    int inter_burst_delay_ms = 0;
     
     char usage[] = "usage: %s [-m fskM 2|4] [-f carrierFreqHz] [-r symbRateHz] [-s shiftHz] [-t] [-c] "
                    "[--testframes Nframes] InputOneBitPerCharFile\n"
@@ -133,6 +186,7 @@ int main(int argc, char **argv)
                    "  --listcodes      List available LDPC codes\n"
                    "  --testframes N   Send N testframes per burst\n"
                    "  --bursts     B   Send B bursts of N testframes (default 1)\n"
+                   "  --delay      ms  testframe inter-burst delay in ms (default 2 frames)\n"
                    "  --seq            send packet sequence numbers (breaks testframe BER counting) in byte[1]\n"
                    "  --fifo fifoName  send stats messages to fifoName\n"     
                    "  --packed         packed byte input\n"     
@@ -140,9 +194,9 @@ int main(int argc, char **argv)
                    "\n"
                    " Example 1, send 10000 bits of (100 bit) tests frames from external test frame generator\n"
                    " at 1000 bits/s using 2FSK:\n\n"
-                   "   $ ../codec2/build_linux/src/fsk_get_test_bits - 10000 | sudo ./fsk_rpitx - -r 1000 -s 1000\n\n"
+                   "   $ ../codec2/build_linux/src/fsk_get_test_bits - 10000 | sudo ./rpitx_fsk - -r 1000 -s 1000\n\n"
                    " Example 2, send two LDPC encoded test frames at 1000 bits/s using 2FSK:\n\n"
-                   "   $ sudo ./fsk_rpitx /dev/zero --code H_256_512_4 -r 1000 -s 1000 --testframes 2\n";
+                   "   $ sudo ./rpitx_fsk /dev/zero --code H_256_512_4 -r 1000 -s 1000 --testframes 2\n";
     
     int opt = 0;
     int opt_idx = 0;
@@ -156,6 +210,7 @@ int main(int argc, char **argv)
             {"fifo",      required_argument, 0, 'i'},
             {"packed",    no_argument,       0, 'l'},
             {"source",    required_argument, 0, 'd'},
+            {"delay",     required_argument, 0, 'j'},
             {0, 0, 0, 0}
         };
         
@@ -216,7 +271,7 @@ int main(int argc, char **argv)
             }                  
             testframes = 1;
             Nframes = atoi(optarg);
-            fprintf(stderr, "Sending %d testframes...\n", Nframes);
+            fprintf(stderr, "rpitx_fsk: Sending %d testframe(s)...\n", Nframes);
             break;
         case 'g':
             strcpy(ant_switch_gpio, optarg);
@@ -228,6 +283,9 @@ int main(int argc, char **argv)
             sys_gpio(tmp, "out");
             sprintf(ant_switch_gpio_path,"/sys/class/gpio/gpio%s/value", ant_switch_gpio);
             sys_gpio(ant_switch_gpio_path, "0");
+            break;
+        case 'j':
+            inter_burst_delay_ms = atoi(optarg);
             break;
         case 'h':
         case '?':
@@ -265,7 +323,7 @@ int main(int argc, char **argv)
         assert(freedv != NULL);
         data_bits_per_frame = freedv_get_bits_per_modem_frame(freedv);
         bits_per_frame = freedv_tx_fsk_ldpc_bits_per_frame(freedv);
-        fprintf(stderr, "FSK LDPC mode code: %s data_bits_per_frame: %d\n", adv.codename, data_bits_per_frame);
+        fprintf(stderr, "rpitx_fsk: FSK LDPC mode code: %s data_bits_per_frame: %d\n", adv.codename, data_bits_per_frame);
 
         /* set up preamble */
         /* TODO: this should be a freeDV API function */        
@@ -282,15 +340,19 @@ int main(int argc, char **argv)
         data_bits_per_frame = log2(m);
         bits_per_frame = data_bits_per_frame;
     }
+
+    /* Start RpiTX ---------------------------------------------------------------------------------*/
     
     // Set shiftHz at 2*Rs if no command line argument
     if (shiftHz == -1)
         shiftHz = 2*SymbolRate;
-    fmmod = new ngfmdmasync(frequency,SymbolRate,14,FIFO_SIZE); 	
+    dbg_setlevel(1);
+    fmmod = new ngfmdmasync(frequency,SymbolRate,14,FIFO_SIZE);
+    initial_frequency = initial_pllc_freq();
     fmmod->clkgpio::disableclk(4);
     
-    fprintf(stderr, "Frequency: %4.1f MHz Rs: %4.1f kHz Shift: %4.1f kHz M: %d \n", frequency/1E6, SymbolRate/1E3, shiftHz/1E3, m);
-    fprintf(stderr, "data_bits_per_frame: %d bits_per_frame: %d\n", data_bits_per_frame, bits_per_frame);
+    fprintf(stderr, "rpitx_fsk: Frequency: %4.1f MHz Rs: %4.1f kHz Shift: %4.1f kHz M: %d \n", frequency/1E6, SymbolRate/1E3, shiftHz/1E3, m);
+    fprintf(stderr, "rpitx_fsk: data_bits_per_frame: %d bits_per_frame: %d\n", data_bits_per_frame, bits_per_frame);
     
     if ((carrier_test == 0) && (one_zero_test == 0)) {
         // FSK Tx --------------------------------------------------------------------
@@ -299,18 +361,18 @@ int main(int argc, char **argv)
         uint8_t tx_frame[bits_per_frame];
 
         if (testframes) {
-            /* FSK_LDPC Tx in test frame mode */
+            /* FSK_LDPC Tx in test frame mode -------------------------------------------*/
 
             assert(fsk_ldpc);
             ofdm_generate_payload_data_bits(data_bits, data_bits_per_frame);
 
-            // antenna switch to Tx
-            if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
-            
             for(int b=0; b<Nbursts; b++) {
 
+                // antenna switch to Tx
+                if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
                 // transmitter carrier on
                 fmmod->clkgpio::enableclk(4);
+                //fmmod = new ngfmdmasync(frequency,SymbolRate,14,FIFO_SIZE);
 
                 // send pre-amble at start of burst
                 modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
@@ -342,21 +404,27 @@ int main(int argc, char **argv)
                 float tdelay = (float)bufferSamples/SymbolRate;
                 usleep((int)(tdelay*1E6));
 
-                printf("End of this burst\n");
+                fprintf(stderr, "rpitx_fsk: End of burst %d\n", b);
                 
                 // transmitter carrier off between bursts
                 fmmod->clkgpio::disableclk(4);
+                //delete fmmod;
+                // antenna switch to Rx
+                if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");
  
-                // Two frames delay so we have some interpacket silence
-                tdelay = (2.0/SymbolRate)*bits_per_frame/(m>>1);
+                if (inter_burst_delay_ms == 0) {
+                    // Two frames delay so we have some interpacket silence
+                    tdelay = (2.0/SymbolRate)*bits_per_frame/(m>>1);
+                } else {
+                    tdelay = inter_burst_delay_ms/1E3;
+                }
                 usleep((int)(tdelay*1E6));
+                check_pllc();
            }
 
-            // antenna switch to Rx
-            if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");
         }
         else {
-            /* regular FSK or FSK_LDPC Tx operation with bits/bytes from stdin */     
+            /* regular FSK or FSK_LDPC Tx operation with bits/bytes from stdin ----------------------*/     
             int nframes = 0;
             while(1) {
                 uint8_t burst_control;
@@ -392,6 +460,7 @@ int main(int argc, char **argv)
                         if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
                         // transmitter carrier on
                         fmmod->clkgpio::enableclk(4);
+                        //fmmod = new ngfmdmasync(frequency,SymbolRate,14,FIFO_SIZE);
                         // send preamble
                         fprintf(stderr, "rpitx_fsk: sending preamble\n");
                         modulate_frame(fmmod, shiftHz, m, preamble_bits, npreamble_bits);
@@ -414,6 +483,7 @@ int main(int argc, char **argv)
                         usleep((int)(tdelay*1E6));
                         // transmitter carrier off between bursts
                         fmmod->clkgpio::disableclk(4);
+                        //delete fmmod;
                         // antenna switch to Rx
                         if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");
                         fprintf(stderr, "rpitx_fsk: Tx off\n");
@@ -434,6 +504,7 @@ int main(int argc, char **argv)
 
                 // allow us to bail on Ctrl-C
                 if (!running) goto finished;
+                check_pllc();
             }
         }
     }
@@ -441,15 +512,19 @@ int main(int argc, char **argv)
     if (carrier_test) {
         fprintf(stderr, "Carrier test mode 1 sec on/off , Ctrl-C to exit\n");
         int count = 0;
+        int cycles = 0;
         float VCOfreqHz = 0;
+        fmmod->clkgpio::enableclk(4);
         while(running) {
-            fmmod->SetFrequencySamples(&VCOfreqHz,1);
+            //fmmod->SetFrequencySamples(&VCOfreqHz,1);
+            while (SetFrequencySampleNonBlocking(fmmod, VCOfreqHz)) usleep(100);
             count++;
             if (count == SymbolRate)
                 fmmod->clkgpio::disableclk(4);
             if (count == 2*SymbolRate) {
                 fmmod->clkgpio::enableclk(4);
                 count = 0;
+                fprintf(stderr,"\rcycles: %d", ++cycles);
             }
         }
     }
@@ -457,28 +532,22 @@ int main(int argc, char **argv)
     if (one_zero_test) {
         fprintf(stderr, "...010101... test mode, Ctrl-C to exit\n");
         float VCOfreqHz = 0;
+        fmmod->clkgpio::enableclk(4);
         while(running) {
             if (VCOfreqHz == shiftHz)
                 VCOfreqHz = 0;
             else
                 VCOfreqHz = shiftHz;
-            fmmod->SetFrequencySamples(&VCOfreqHz,1);
+            while (SetFrequencySampleNonBlocking(fmmod, VCOfreqHz)) usleep(100);
         }
     }
 
     finished:
+    check_pllc();
+    fprintf(stderr, "finishing....\n");
     
-    // this was required to prevent errors on final frame, I suspect
-    // as fmmod FIFO hasn't emptied by the time we delete fmmod.
-    // Seems a bit wasteful, so there might be a better way
-
-    float VCOfreqHz = 0;
-    for(int i=0; i<50; i++)
-        fmmod->SetFrequencySamples(&VCOfreqHz,1);
-    printf("End of Tx\n");
-  
+    if (fmmod) delete fmmod;    
     if (fsk_ldpc) freedv_close(freedv);
-    delete fmmod;
 
     if (*ant_switch_gpio) {
         sys_gpio(ant_switch_gpio_path, "0");
