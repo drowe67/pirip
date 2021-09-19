@@ -1,11 +1,5 @@
 #!/bin/bash
-# frame repeater service
-
-# TODO
-#   [X] way to send stderr to log file
-#   [ ] way to set freq at start up
-#   [ ] way to set Rs and M at start up
-#   [ ] way to start as frame repeater or beacon
+# Frame repeater service, runs on the Pi
 
 TERM_ADDR=0x2
 RS=10000
@@ -60,8 +54,12 @@ case "$1" in
             echo "rtl_fsk failed to start!"
             rm ${PIDFILE}
             exit 1
-        fi   
-        tx_burst_rpitx $2
+        fi
+        num_bursts=1
+        if [ "$#" -eq 2 ]; then
+            num_bursts=$2
+        fi
+        tx_burst_rpitx $num_bursts
         stop_service
         ;;
     stop)

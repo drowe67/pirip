@@ -68,7 +68,7 @@ Service scripts have been written to wrap up the complex command lines.
 
 ## Service command lines
 
-1. Loopback test is a good start, this checks each terminal is working stand alone.  These tests send a burst from the Termnals Tx to it's Rx:
+1. Loopback test is a good start, this checks each terminal is working stand alone.  These tests send a burst from the Terminals Tx to it's Rx:
    ```
    laptop$ sudo ./ping start_loopback
    ```
