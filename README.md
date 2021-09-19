@@ -6,7 +6,7 @@ Minimal hardware IP over VHF/UHF Radio using RpiTx and RTLSDRs [1].
 
 # Project Plan and Status
 
-Status Nov 2020 - working on M8.
+Status Dec 2020 - working on M9.
 
 | Milestone | Description | Comment |
 | --- | --- | --- |
@@ -17,9 +17,10 @@ Status Nov 2020 - working on M8.
 | M5 | ~~Pi running Tx and Rx~~ | Half duplex, loopback demo would be neat |
 | M6 | ~~Add LDPC FEC to waveform~~ | Needs to be tested/tuned OTA |
 | M7 | ~~Bidirectional half duplex Tx/Rx on single Pi~~ | frame repeater (ping) application developed and tested on the bench | 
-| M8 | Automated OTA test campaign | | 
-| M9 | TAP/TUN integration and demo IP link | What protocol? |
-| M10 | Document how to build simple wire antennas | |
+| M8 | ~~Automated test system~~ | service scripts and 24 hour bench test completed | 
+| M9 | OTA physical layer tests | |
+| M10 | TAP/TUN integration and demo IP link | What protocol? |
+| M11 | Document how to build simple wire antennas | |
 
 # Building
 
@@ -44,7 +45,7 @@ Then reboot your Pi.
 
 ## RTLSDR FSK Receiver
 
-On your laptop/PC:
+On your Pi (or laptop/PC):
 ```
 $ sudo apt update
 $ sudo apt install libusb-1.0-0-dev git cmake
@@ -55,13 +56,13 @@ $ ./build_rtlsdr.sh
 
 # Frame Repeater Automated Testing
 
-A Frame Repeater system has been developed to test the physical layer over the air.  Terminal 1 sends a burst over the air to Terminal 2, which echoes the same frames back to Terminal 1.  Terminal 1 then logs the received packets, including SNR.  The system is automated, so that it can run for hours unattended.  By analysing the log files the Packet Error Rate (PER) and SNR of both legs of the link can be analysed.  Knowing the gain of the RTLSDR receiver, we can use signal power S, and noise power N to estimate the link budget and local noise density (EMI) at the receiver.
+A Frame Repeater has been developed to test the physical layer over the air.  Terminal 1 sends a burst of frames to Terminal 2, which echoes the same frames back to Terminal 1.  Terminal 1 logs metadata for each frame (Signal and Noise Power, SNR, time of arrival).  The system is automated, so that it can run for hours unattended.  By analysing the log files the Packet Error Rate (PER) and SNR of both legs of the link can be analysed.  Knowing the gain of the RTLSDR receiver, we can use signal power S, and noise power N to estimate the link budget and local noise density (EMI) at the receiver.
 
 Terminal 1 is a laptop with a HackRF Tx and RTLSDR Rx.  Terminal 2 is a Pi running rpitx and a RTLSDR.
 
 Service scripts have been written to wrap up the complex command lines.
 
-`scripts/ping` is the tx service that sends the Tx bursts, and logs data on the receive bursts; `scripts/frame_repeater` is the frame repeater service that run s on the Pi.  Both service scripts include debug/test commands and command line help.  The `start_loopback` command is a good way to test the local Tx/Rx is working OK.  A nearby SSB rado tuned to the same frequency is useful to monitor transmissions.
+`scripts/ping` is the service that sends the Tx bursts, and logs data on the received bursts; `scripts/frame_repeater` is the frame repeater service that runs on the Pi.  Both service scripts include debug/test modes and command line help.  The `start_loopback` command is a good way to test the local Tx/Rx is working OK.  A nearby SSB radio tuned to the same frequency is useful to monitor transmissions.
 
    ![Frame Repeater](doc/frame_repeater_test.png)
    ![Frame Repeater Bench Test](doc/repeater_otc.jpg)
@@ -88,6 +89,8 @@ Service scripts have been written to wrap up the complex command lines.
    ... will send 6 packets, 10 seconds apart (a 1 minute total run time).  Look at /var/log/ping for results.
 
 # Useful Command Lines
+
+This section contains command lines that were used during development to build up the system.  Some are pretty complex and not easily remembered, so I have logged them here.
 
 1. Transmit two tone test signal for Pi:
    ```

@@ -49,24 +49,44 @@ function start_rx {
 
 function stop_service {
     echo "service stopping - bye!" 1>&2
-    pid2=$(cat ${PIDFILE2})
-    kill ${pid2}
-    pid1=$(cat ${PIDFILE1})
-    rm ${PIDFILE1} ${PIDFILE2}
-    kill ${pid1}
+    if [ -e ${PIDFILE2} ]; then
+        pid2=$(cat ${PIDFILE2})
+        rm ${PIDFILE2}
+        kill ${pid2}
+    fi
+    if [ -e ${PIDFILE1} ]; then
+        pid1=$(cat ${PIDFILE1})
+        rm ${PIDFILE1}
+        kill ${pid1}
+    fi
+}
+
+
+function check_running {
+    if [ -e ${PIDFILE1} ]; then
+        echo "service already running... pid: ${PIDFILE1}"
+        exit 1
+    fi
+    if [ -e ${PIDFILE2} ]; then
+        echo "service already running... pid: ${PIDFILE2}"
+        exit 1
+    fi
 }
 
 case "$1" in 
     start)
+        check_running
         ( start_rx "--filter ${TERM_ADDR}" && sleep 1 && tx_burst_hackrf $2 ${PAUSE} && stop_service) 2>>${LOGFILE} &
         echo $!>${PIDFILE1}
         ;;
     start_verbose)
+        check_running
         # Show all tool outputs and log output to stderr rather than logfile
         verbose=1
         start_rx "--filter ${TERM_ADDR}" && sleep 1 && tx_burst_hackrf 1 1 && stop_service
         ;;
     start_loopback)
+        check_running
         # Send packets from HackRF to RTLSDR on this machine (no filtering of packets)
         verbose=1
         start_rx && sleep 1 && tx_burst_hackrf 1 1 && stop_service
@@ -85,7 +105,7 @@ case "$1" in
         $0 start
         ;;
     status)
-        if [ -e ${PIDFILE} ]; then
+        if [ -e ${PIDFILE1} ]; then
             echo ${NAME} is running, pid=`cat ${PIDFILE}`
         else
             echo$ {NAME} is NOT running
@@ -95,8 +115,8 @@ case "$1" in
     *)
     echo "Usage: sudo $0 {start|stop|status|restart}"
         echo ""
-        echo "start numPings - send numPing test frames to frame repeater, one every ${PAUSE} seconds, logfile is ${LOGFILE}"
-        echo "start_verbose  - send single test frame in foreground, no logfile"
+        echo "start numPings - send numPing bursts to frame repeater, one every ${PAUSE} seconds, logfile is ${LOGFILE}"
+        echo "start_verbose  - send single burst to frame repeater in foreground, no logfile"
         echo "start_loopback - local loopback test, Tx/Rx a single burst of 3 frames"
         echo "start_carrier  - Send carrier from HackRF at same tx power as FSK signal"
 esac
