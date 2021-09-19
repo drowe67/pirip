@@ -1,12 +1,6 @@
 #!/bin/bash
 # ping service script - sends bursts to the frame repeater and logs reply
-
-# TODO
-# [X] receive it's own packets
-# [X] log one one logfile
-# [X] clean start up and shut down
-# [X] send a sequence of packets
-# [X] test with Pi running frame_repeater OTC
+# Runs on a Host laptop with HackRF Tx and RTLSDR Rx
 
 TERM_ADDR=0x1
 RS=10000
