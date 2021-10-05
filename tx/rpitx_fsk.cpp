@@ -514,6 +514,7 @@ int main(int argc, char **argv)
         int count = 0;
         int cycles = 0;
         float VCOfreqHz = 0;
+        if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
         fmmod->clkgpio::enableclk(4);
         while(running) {
             //fmmod->SetFrequencySamples(&VCOfreqHz,1);
@@ -527,11 +528,13 @@ int main(int argc, char **argv)
                 fprintf(stderr,"\rcycles: %d", ++cycles);
             }
         }
+        if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");       
     }
 
     if (one_zero_test) {
         fprintf(stderr, "...010101... test mode, Ctrl-C to exit\n");
         float VCOfreqHz = 0;
+        if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
         fmmod->clkgpio::enableclk(4);
         while(running) {
             if (VCOfreqHz == shiftHz)
@@ -540,6 +543,7 @@ int main(int argc, char **argv)
                 VCOfreqHz = shiftHz;
             while (SetFrequencySampleNonBlocking(fmmod, VCOfreqHz)) usleep(100);
         }
+        if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");       
     }
 
     finished:
