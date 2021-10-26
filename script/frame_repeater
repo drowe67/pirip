@@ -1,14 +1,8 @@
 #!/bin/bash
-# frame repeater service
-
-# TODO
-#   [X] way to send stderr to log file
-#   [ ] way to set freq at start up
-#   [ ] way to set Rs and M at start up
-#   [ ] way to start as frame repeater or beacon
+# Frame repeater service, runs on the Pi
 
 TERM_ADDR=0x2
-RS=10000
+RS=1000
 DATA_BITS_PER_FRAME=256
 CODE=H_${DATA_BITS_PER_FRAME}_512_4
 TR_SWITCH_GPIO=21
@@ -17,7 +11,7 @@ NAME=frame_repeater
 PIDFILE=/var/run/${NAME}.pid
 LOGFILE=/var/log/${NAME}.log
 PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}
-GAIN="${GAIN:-49}"
+GAIN="${GAIN:-40}"
 
 function tx_burst_rpitx {
     num_bursts=$1
@@ -26,7 +20,7 @@ function tx_burst_rpitx {
 }
 
 function start_rx {
-    rtl_fsk -g ${GAIN} -f 144490000 - -a 200000 -r ${RS} --code  H_256_512_4 --mask ${RS} -L $1 > /dev/null &
+    rtl_fsk -g ${GAIN} -f 144490000 - -a 40000 -r ${RS} --code  H_256_512_4  -L $1 > /dev/null &
     echo $!>${PIDFILE}
 }
 
@@ -39,14 +33,14 @@ function stop_service {
 
 case "$1" in 
     start)
-        ( rtl_fsk -g 49 -f 144490000 - -a 200000 -r ${RS} --code ${CODE} --mask ${RS} --filter ${TERM_ADDR} -q -b | \
+        ( rtl_fsk -g ${GAIN} -f 144490000 - -a 40000 -r ${RS} --code ${CODE} --filter ${TERM_ADDR} -q -b | \
           frame_repeater ${DATA_BITS_PER_FRAME} ${TERM_ADDR} | \
           rpitx_fsk - --code ${CODE} -r ${RS} -s ${RS} -g ${TR_SWITCH_GPIO} --packed -- ) >>${LOGFILE} 2>&1 &
         echo $!>${PIDFILE}
         ;;
     start_verbose)
         # run in the foreground and log to stderr instead of a logfile
-        rtl_fsk -g 49 -f 144490000 - -a 200000 -r ${RS} --code ${CODE} --mask ${RS} --filter ${TERM_ADDR} -q -b -v | \
+        rtl_fsk -g ${GAIN} -f 144490000 - -a 40000 -r ${RS} --code ${CODE} --filter ${TERM_ADDR} -q -b -v | \
         frame_repeater ${DATA_BITS_PER_FRAME} ${TERM_ADDR} | \
         rpitx_fsk - --code ${CODE} -r ${RS} -s ${RS} -g ${TR_SWITCH_GPIO} --packed --
         ;;
@@ -60,8 +54,12 @@ case "$1" in
             echo "rtl_fsk failed to start!"
             rm ${PIDFILE}
             exit 1
-        fi   
-        tx_burst_rpitx $2
+        fi
+        num_bursts=1
+        if [ "$#" -eq 2 ]; then
+            num_bursts=$2
+        fi
+        tx_burst_rpitx $num_bursts
         stop_service
         ;;
     stop)

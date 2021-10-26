@@ -1,15 +1,10 @@
 #!/bin/bash
 # ping service script - sends bursts to the frame repeater and logs reply
-
-# TODO
-# [X] receive it's own packets
-# [X] log one one logfile
-# [X] clean start up and shut down
-# [X] send a sequence of packets
-# [X] test with Pi running frame_repeater OTC
+# Runs on a Host laptop with HackRF Tx and RTLSDR Rx
 
 TERM_ADDR=0x1
-RS=10000
+RS=1000
+TONE1=1000
 DATA_BITS_PER_FRAME=256
 CODE=H_${DATA_BITS_PER_FRAME}_512_4
 PIRIP_PATH=${PWD}/..
@@ -19,9 +14,9 @@ PIDFILE2=/var/run/${NAME}2.pid
 LOGFILE=/var/log/${NAME}.log
 PATH=${PIRIP_PATH}/tx:${PIRIP_PATH}/librtlsdr/build_rtlsdr/src:${PATH}
 PATH=${PIRIP_PATH}/codec2/build_linux/misc:${PIRIP_PATH}/codec2/build_linux/src:${PATH}
-PAUSE="${PAUSE:-10}"
-GAIN="${GAIN:-49}"
-HACKRF_TX_GAIN="${HACKRF_TX_GAIN:-40}"
+PAUSE="${PAUSE:-5}"
+GAIN="${GAIN:-40}"
+HACKRF_TX_GAIN="${HACKRF_TX_GAIN:-47}"
 
 function tx_burst_hackrf {
     num_bursts=$1
@@ -29,27 +24,27 @@ function tx_burst_hackrf {
     tmp=$(mktemp)
     if [ -z ${verbose+x} ]; then
         # quiet version
-        freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${RS} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - 2>/dev/null | tlininterp - - 40 -d -f > ${tmp}
+        freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${TONE1} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - 2>/dev/null | tlininterp - - 40 -d -f > ${tmp}
         for (( i=1; i<=$num_bursts; i++ ))
         do
             printf "%d Tx burst %d from HackRF...\n" `date +%s` ${i} 1>&2
-            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN} 2>/dev/null 1>/dev/null
+            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN} -a 1 2>/dev/null 1>/dev/null
         sleep $pause_between_bursts
         done
     else
         # verbose version
-        freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${RS} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - | tlininterp - - 40 -d -f > ${tmp}
+        freedv_data_raw_tx --source 0x1 -c --testframes 3 --burst 1 --Fs 100000 --Rs ${RS} --tone1 ${TONE1} --shift ${RS} -a 30000 FSK_LDPC /dev/zero - | tlininterp - - 40 -d -f > ${tmp}
         for (( i=1; i<=$num_bursts; i++ ))
         do
             printf "%d Tx burst %d from HackRF...\n" `date +%s` ${i} 1>&2
-            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN}
+            hackrf_transfer -t ${tmp} -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN} -a 1
         sleep $pause_between_bursts
         done
     fi
 }
 
 function start_rx {
-    rtl_fsk -g ${GAIN} -f 144490000 - -a 200000 -r 10000 --code  H_256_512_4 --mask 10000 -L $1 > /dev/null &
+    rtl_fsk -g ${GAIN} -f 144490000 - -a 40000 -r ${RS} --code  H_256_512_4  -L $1 -u localhost > /dev/null &
     echo $!>${PIDFILE2}
 }
 
@@ -99,9 +94,9 @@ case "$1" in
         ;;
     start_carrier)
         # Send carrier from HackRF at same Tx power as FSK signal, much easier to measure on a spec-an
-        fsk_get_test_bits - 60000 | fsk_mod -t -c -a 30000 2 40000 1000 1000 2000 - - | \
+        fsk_get_test_bits - 60000 | fsk_mod -t -c -a 60000 2 40000 1000 1000 2000 - - | \
         tlininterp - - 100 -d -f | \
-        hackrf_transfer -t - -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN}
+        hackrf_transfer -t - -s 4E6 -f 143.5E6 -x ${HACKRF_TX_GAIN} -a 1
         ;;
     stop)
         stop_service
