@@ -6,7 +6,7 @@ Minimal hardware IP over VHF/UHF Radio using RpiTx and RTLSDRs [1].
 
 # Project Plan and Status
 
-Status Dec 2020 - working on M9.
+Status Oct 2021 - M9 in progress - have demonstrated 15km over the air link at 1000 bits/s.
 
 | Milestone | Description | Comment |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ Status Dec 2020 - working on M9.
 | M6 | ~~Add LDPC FEC to waveform~~ | Needs to be tested/tuned OTA |
 | M7 | ~~Bidirectional half duplex Tx/Rx on single Pi~~ | frame repeater (ping) application developed and tested on the bench | 
 | M8 | ~~Automated test system~~ | service scripts and 24 hour bench test completed | 
-| M9 | OTA physical layer tests | |
+| M9 | OTA physical layer tests | 15 km link at 1 kbit/s |
 | M10 | TAP/TUN integration and demo IP link | What protocol? |
 | M11 | Document how to build simple wire antennas | |
 
@@ -305,7 +305,7 @@ This section contains command lines that were used during development to build u
 
 # Reading Further
 
-1. Open IP over VHF/UHF [Part 1](http://www.rowetel.com/?p=7207) [Part 2](http://www.rowetel.com/?p=7334) [Part 3](http://www.rowetel.com/?p=7567)
+1. Open IP over VHF/UHF [Part 1](http://www.rowetel.com/?p=7207) [Part 2](http://www.rowetel.com/?p=7334) [Part 3](http://www.rowetel.com/?p=7567) [Part 4](http://www.rowetel.com/?p=7577) [Part 5](http://www.rowetel.com/?p=7898) 
 1. [FSK_LDPC Data Mode](http://www.rowetel.com/?p=7467) - Physical layer design and testing
 1. [Codec 2 FSK Raw Data Modes](https://github.com/drowe67/codec2/blob/master/README_data.md)
 1. [Codec 2 FSK Modem](https://github.com/drowe67/codec2/blob/master/README_fsk.md)
