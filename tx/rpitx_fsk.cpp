@@ -510,28 +510,18 @@ int main(int argc, char **argv)
     }
 
     if (carrier_test) {
-        fprintf(stderr, "Carrier test mode 1 sec on/off , Ctrl-C to exit\n");
-        int count = 0;
-        int cycles = 0;
+        fprintf(stderr, "Carrier test mode, Ctrl-C to exit\n");
         float VCOfreqHz = 0;
+        if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
         fmmod->clkgpio::enableclk(4);
-        while(running) {
-            //fmmod->SetFrequencySamples(&VCOfreqHz,1);
-            while (SetFrequencySampleNonBlocking(fmmod, VCOfreqHz)) usleep(100);
-            count++;
-            if (count == SymbolRate)
-                fmmod->clkgpio::disableclk(4);
-            if (count == 2*SymbolRate) {
-                fmmod->clkgpio::enableclk(4);
-                count = 0;
-                fprintf(stderr,"\rcycles: %d", ++cycles);
-            }
-        }
+        while(running) usleep(1000);
+        if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");       
     }
 
     if (one_zero_test) {
         fprintf(stderr, "...010101... test mode, Ctrl-C to exit\n");
         float VCOfreqHz = 0;
+        if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "1");
         fmmod->clkgpio::enableclk(4);
         while(running) {
             if (VCOfreqHz == shiftHz)
@@ -540,6 +530,7 @@ int main(int argc, char **argv)
                 VCOfreqHz = shiftHz;
             while (SetFrequencySampleNonBlocking(fmmod, VCOfreqHz)) usleep(100);
         }
+        if (*ant_switch_gpio_path) sys_gpio(ant_switch_gpio_path, "0");       
     }
 
     finished:

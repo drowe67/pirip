@@ -69,7 +69,7 @@ Service scripts have been written to wrap up the complex command lines.
 
 ## Service command lines
 
-1. Loopback test is a good start, this checks each terminal is working stand alone.  These tests send a burst from the Termnals Tx to it's Rx:
+1. Loopback test is a good start, this checks each terminal is working stand alone.  These tests send a burst from the Terminals Tx to it's Rx:
    ```
    laptop$ sudo ./ping start_loopback
    ```
@@ -84,9 +84,9 @@ Service scripts have been written to wrap up the complex command lines.
    ```
    Then start the Terminal 1 `ping` service:
    ```
-   laptop$ sudo ./ping start_loopback 6
+   laptop$ sudo ./ping start 6
    ```
-   ... will send 6 packets, 10 seconds apart (a 1 minute total run time).  Look at /var/log/ping for results.
+   ... will send 6 packets, 10 seconds apart (a 1 minute total run time).  Look at `/var/log/ping` for results.
 
 # Useful Command Lines
 

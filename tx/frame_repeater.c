@@ -88,6 +88,7 @@ int main(int argc, char *argv[]) {
             if (!(rx_status & FREEDV_RX_SYNC)) {
                 /* We've lost RX_SYNC so receive burst finished.  So now we can Tx the frames we have buffered */
                 fprintf(stderr, "frame_repeater: Sending received %d frame burst of %d bytes\n", nframes, bytes_in);
+                sleep(1);
                 bytes_out = 0; burst_control = 1;
                 while(bytes_out != bytes_in) {
                     fwrite(&burst_control, sizeof(uint8_t), 1, stdout);
